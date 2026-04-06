@@ -1,0 +1,9 @@
+{
+  "name": "x402-operator",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/agent"
+  ]
+}

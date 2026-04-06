@@ -2,7 +2,12 @@
 
 > Delegated execution for agents on X Layer without surrendering custody.
 
-**Status:** Planning / design phase
+**Status:** Phase 1 — vertical slice implementation
+
+## Prerequisites
+
+- [Foundry](https://book.getfoundry.sh/) — forge v1.4.1 (`forge Version: 1.4.1-v1.4.1`)
+- Solidity 0.8.24
 
 ## Why this matters
 Agents are good at deciding when to act, but repeated onchain execution creates a bad tradeoff today: either the owner hands over too much wallet power, or the owner has to sign every transaction manually. `X402 Operator` is designed to remove that tradeoff. It lets an owner lock capital inside a policy-constrained vault, authorize a controller agent, and let an operator execute approved actions while charging per request through `x402`.
