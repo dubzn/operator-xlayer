@@ -33,6 +33,15 @@ contract OperatorVault is EIP712 {
     address public authorizedOperator;
     address public trustedRouter;
     uint256 public maxAmountPerTrade;
+    uint256 public maxDailyVolume;
+    uint256 public maxSlippageBps;
+    uint256 public cooldownSeconds;
+    bool public paused;
+
+    // Volume tracking (UTC day bucket)
+    uint256 public currentDay;
+    uint256 public dailyVolumeUsed;
+    uint256 public lastExecution;
 
     mapping(address => bool) public authorizedControllers;
     mapping(address => bool) public allowedTokens;
@@ -46,7 +55,9 @@ contract OperatorVault is EIP712 {
     event ControllerRevoked(address indexed controller);
     event TokenAllowed(address indexed token);
     event TokenRemoved(address indexed token);
-    event PolicyUpdated(uint256 maxAmountPerTrade);
+    event PolicyUpdated(uint256 maxAmountPerTrade, uint256 maxDailyVolume, uint256 maxSlippageBps, uint256 cooldownSeconds);
+    event Paused();
+    event Unpaused();
     event ExecutionSucceeded(
         bytes32 indexed jobId,
         address indexed controller,
@@ -67,6 +78,10 @@ contract OperatorVault is EIP712 {
     error AmountExceedsLimit(uint256 amount, uint256 max);
     error VaultAddressMismatch();
     error SwapFailed();
+    error VaultPaused();
+    error DailyVolumeExceeded(uint256 used, uint256 max);
+    error CooldownNotMet(uint256 lastExec, uint256 cooldown);
+    error SlippageExceeded(uint256 amountOut, uint256 minAmountOut);
 
     // --- Modifiers ---
 
@@ -86,12 +101,18 @@ contract OperatorVault is EIP712 {
         address _owner,
         address _operator,
         address _trustedRouter,
-        uint256 _maxAmountPerTrade
+        uint256 _maxAmountPerTrade,
+        uint256 _maxDailyVolume,
+        uint256 _maxSlippageBps,
+        uint256 _cooldownSeconds
     ) EIP712("X402Operator", "1") {
         owner = _owner;
         authorizedOperator = _operator;
         trustedRouter = _trustedRouter;
         maxAmountPerTrade = _maxAmountPerTrade;
+        maxDailyVolume = _maxDailyVolume;
+        maxSlippageBps = _maxSlippageBps;
+        cooldownSeconds = _cooldownSeconds;
     }
 
     // --- Owner functions ---
@@ -126,9 +147,27 @@ contract OperatorVault is EIP712 {
         emit TokenRemoved(token);
     }
 
-    function updatePolicy(uint256 _maxAmountPerTrade) external onlyOwner {
+    function updatePolicy(
+        uint256 _maxAmountPerTrade,
+        uint256 _maxDailyVolume,
+        uint256 _maxSlippageBps,
+        uint256 _cooldownSeconds
+    ) external onlyOwner {
         maxAmountPerTrade = _maxAmountPerTrade;
-        emit PolicyUpdated(_maxAmountPerTrade);
+        maxDailyVolume = _maxDailyVolume;
+        maxSlippageBps = _maxSlippageBps;
+        cooldownSeconds = _cooldownSeconds;
+        emit PolicyUpdated(_maxAmountPerTrade, _maxDailyVolume, _maxSlippageBps, _cooldownSeconds);
+    }
+
+    function pause() external onlyOwner {
+        paused = true;
+        emit Paused();
+    }
+
+    function unpause() external onlyOwner {
+        paused = false;
+        emit Unpaused();
     }
 
     // --- Core execution ---
@@ -138,8 +177,12 @@ contract OperatorVault is EIP712 {
         bytes calldata routeData,
         bytes calldata signature,
         bytes32 paymentRef,
-        address registry
+        address registry,
+        uint256 minAmountOut
     ) external onlyOperator returns (bytes32 jobId) {
+        // 0. Pause check
+        if (paused) revert VaultPaused();
+
         // 1. Verify vault address matches
         if (intent.vaultAddress != address(this)) revert VaultAddressMismatch();
 
@@ -168,6 +211,21 @@ contract OperatorVault is EIP712 {
             revert AmountExceedsLimit(intent.amount, maxAmountPerTrade);
         }
 
+        // 7. Daily volume check (UTC day bucket)
+        uint256 today = block.timestamp / 86400;
+        if (today != currentDay) {
+            currentDay = today;
+            dailyVolumeUsed = 0;
+        }
+        if (maxDailyVolume > 0 && dailyVolumeUsed + intent.amount > maxDailyVolume) {
+            revert DailyVolumeExceeded(dailyVolumeUsed + intent.amount, maxDailyVolume);
+        }
+
+        // 8. Cooldown check (skip on first execution)
+        if (cooldownSeconds > 0 && lastExecution > 0 && block.timestamp < lastExecution + cooldownSeconds) {
+            revert CooldownNotMet(lastExecution, cooldownSeconds);
+        }
+
         // --- Execute swap through trusted router ---
         uint256 balanceBefore = IERC20(intent.tokenOut).balanceOf(address(this));
 
@@ -176,6 +234,15 @@ contract OperatorVault is EIP712 {
         if (!success) revert SwapFailed();
 
         uint256 amountOut = IERC20(intent.tokenOut).balanceOf(address(this)) - balanceBefore;
+
+        // 9. Slippage check — effective slippage = min(policy, intent)
+        if (minAmountOut > 0 && amountOut < minAmountOut) {
+            revert SlippageExceeded(amountOut, minAmountOut);
+        }
+
+        // Update volume and cooldown tracking
+        dailyVolumeUsed += intent.amount;
+        lastExecution = block.timestamp;
 
         // --- Compute jobId and emit ---
         bytes32 intentHash = _hashTypedDataV4(structHash);

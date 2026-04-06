@@ -52,12 +52,16 @@ export async function executeIntent(
     intent.deadline,
   ];
 
+  // Compute minAmountOut from quote (Phase 2: use slippage bounds)
+  const minAmountOut = 0; // TODO: compute from quote.expectedOut and effective slippage
+
   const tx = await vault.executeSwap(
     intentTuple,
     quote.routeData,
     signature,
     paymentRefBytes,
-    config.registryAddress
+    config.registryAddress,
+    minAmountOut
   );
 
   const receipt = await tx.wait();

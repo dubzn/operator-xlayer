@@ -1,5 +1,5 @@
 export const OperatorVaultABI = [
-  "function executeSwap(tuple(address vaultAddress, address controller, address tokenIn, address tokenOut, uint256 amount, uint256 maxSlippageBps, uint256 nonce, uint256 deadline) intent, bytes routeData, bytes signature, bytes32 paymentRef, address registry) external returns (bytes32 jobId)",
+  "function executeSwap(tuple(address vaultAddress, address controller, address tokenIn, address tokenOut, uint256 amount, uint256 maxSlippageBps, uint256 nonce, uint256 deadline) intent, bytes routeData, bytes signature, bytes32 paymentRef, address registry, uint256 minAmountOut) external returns (bytes32 jobId)",
   "function authorizedControllers(address) view returns (bool)",
   "function usedNonces(uint256) view returns (bool)",
   "function allowedTokens(address) view returns (bool)",

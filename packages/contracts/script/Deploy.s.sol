@@ -7,7 +7,6 @@ import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
 
 contract Deploy is Script {
     function run() external {
-        // Read config from environment
         address owner = vm.envAddress("VAULT_OWNER");
         address operator = vm.envAddress("OPERATOR_ADDRESS");
         address trustedRouter = vm.envAddress("TRUSTED_ROUTER");
@@ -15,23 +14,26 @@ contract Deploy is Script {
         address tokenIn = vm.envAddress("TOKEN_IN");
         address tokenOut = vm.envAddress("TOKEN_OUT");
         uint256 maxPerTrade = vm.envUint("MAX_PER_TRADE");
+        uint256 maxDailyVolume = vm.envUint("MAX_DAILY_VOLUME");
+        uint256 maxSlippageBps = vm.envUint("MAX_SLIPPAGE_BPS");
+        uint256 cooldownSeconds = vm.envUint("COOLDOWN_SECONDS");
 
         vm.startBroadcast();
 
-        // 1. Deploy registry
         ExecutionRegistry registry = new ExecutionRegistry();
         console.log("ExecutionRegistry:", address(registry));
 
-        // 2. Deploy vault
         OperatorVault vault = new OperatorVault(
             owner,
             operator,
             trustedRouter,
-            maxPerTrade
+            maxPerTrade,
+            maxDailyVolume,
+            maxSlippageBps,
+            cooldownSeconds
         );
         console.log("OperatorVault:", address(vault));
 
-        // 3. Configure vault
         vault.authorizeController(controller);
         vault.addAllowedToken(tokenIn);
         vault.addAllowedToken(tokenOut);
