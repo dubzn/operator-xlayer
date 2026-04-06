@@ -73,5 +73,8 @@ Portfolio is interesting for richer before/after vault snapshots and monitoring,
 4. Market
 5. Portfolio only if time remains
 
+## MVP decision
+Portfolio is explicitly **stretch-only**. It should not block contracts, typed intent validation, `x402`, or the controller demo flow.
+
 ## Anti-pattern to avoid
 Do not inflate the project by claiming every available module while only using each one superficially. The hackathon pitch is stronger if every listed integration is part of the critical execution path.

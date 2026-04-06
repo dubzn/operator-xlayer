@@ -16,6 +16,7 @@ Definition of done:
 - core authorization and policy tests pass
 - contracts can be deployed to testnet or equivalent environment
 - receipt path is stable enough for backend integration
+- EIP-712 intent verification is settled end to end
 
 ### Stream 2: Backend / operator service
 Owns:
@@ -71,6 +72,7 @@ Definition of done:
 - settle final contract interfaces
 - define typed `ExecutionIntent`
 - settle exact policy fields and events
+- settle EIP-712 domain and digest verification path
 - assign owners for each workstream
 
 ### Day 2
@@ -92,6 +94,7 @@ Definition of done:
 - add `x402` execute path
 - ensure payment references can be linked to execution receipts
 - integrate Market and Security if needed for preview and checks
+- implement `jobId = keccak256(intentHash, paymentReference)` consistently across backend and receipt handling
 
 ### Day 6
 - build one controller demo agent
@@ -124,10 +127,9 @@ The contract owner should be on the critical path early. The console should neve
 
 ## What to cut first if time slips
 Cut in this order:
-1. rebalance support
-2. richer preview logic
-3. extra console polish
-4. any stretch integration beyond core Onchain OS services
+1. richer preview logic
+2. extra console polish
+3. any stretch integration beyond core Onchain OS services
 
 Do **not** cut:
 - signed intents

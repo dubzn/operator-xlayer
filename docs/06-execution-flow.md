@@ -49,17 +49,20 @@ The runtime path happens every time the controller wants a real execution.
 
 1. **Controller creates an `ExecutionIntent`**
    - The payload is deterministic and typed.
-   - It includes vault ID, token pair, amount, slippage bound, nonce, and deadline.
+   - It includes vault address, token pair, amount, slippage bound, nonce, and deadline.
 
 2. **Controller signs the intent**
    - The signature proves the controller approved this exact action.
 
 3. **Controller requests execution from the operator**
    - The controller sends the intent and the signature.
-   - The controller pays the operator fee via `x402`.
+   - The operator first performs free pre-validation.
+   - If the request is acceptable, the controller pays the operator fee via `x402`.
 
 4. **Operator validates the request**
+   - derive `intentHash`
    - verify payment
+   - derive `jobId = keccak256(intentHash, paymentReference)`
    - verify signature
    - verify controller allowlist status
    - verify nonce and deadline
@@ -75,15 +78,16 @@ The runtime path happens every time the controller wants a real execution.
    - if invalid, the transaction reverts
 
 7. **Registry stores the execution receipt**
-   - record who requested the job
-   - record which vault executed it
+   - record the successful job ID
+   - record which vault address executed it
    - record the tx hash and relevant before/after execution facts
-   - update basic track-record counters
+   - update the onchain success-oriented track record
 
 ## Concrete example
-- `Vault #12`
+- `vaultAddress = 0xVault`
 - capital: `5000 USDT`
 - owner policy:
+  - base token: `USDT`
   - allowed tokens: `USDT`, `ETH`, `OKB`
   - max per trade: `1000 USDT`
   - max daily volume: `3000 USDT`
@@ -94,7 +98,7 @@ The runtime path happens every time the controller wants a real execution.
 
 ### Example request
 `TreasuryBot` signs:
-- `vaultId = 12`
+- `vaultAddress = 0xVault`
 - `tokenIn = USDT`
 - `tokenOut = ETH`
 - `amount = 800`
@@ -103,6 +107,7 @@ The runtime path happens every time the controller wants a real execution.
 - `deadline = <timestamp>`
 
 Then:
+- `X402 Operator` pre-validates the request before charging
 - `TreasuryBot` pays the service fee through `x402`
 - `X402 Operator` validates payment and intent
 - the vault verifies the policy
@@ -111,12 +116,20 @@ Then:
 
 ## What the receipt should make obvious
 A useful receipt should answer:
-- which vault was used
+- which vault address was used
 - which controller requested the action
 - which operator executed it
 - which payment funded the execution service
 - which transaction actually ran onchain
 - whether the outcome stayed inside expectations
+
+## What happens if execution fails after payment
+MVP keeps the payment semantics simple:
+- the controller pays for the operator's execution service attempt
+- if the payment is valid but the onchain execution reverts, the fee is not automatically refunded
+- this is why the operator should perform free pre-validation before issuing the 402 challenge
+
+This avoids building refund or dispute logic into the first version.
 
 ## Separation of concerns
 - **Preview** tells the caller what would likely happen.

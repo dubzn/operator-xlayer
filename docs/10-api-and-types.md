@@ -32,6 +32,7 @@ Suggested request:
 
 Suggested response:
 - execution status
+- `jobId`
 - receipt reference
 - tx hash when available
 
@@ -47,7 +48,7 @@ Purpose:
 
 ### `ExecutionIntent`
 Minimum fields:
-- `vaultId`
+- `vaultAddress`
 - `controller`
 - `tokenIn`
 - `tokenOut`
@@ -63,7 +64,7 @@ Suggested note:
 ### `ExecutionPreview`
 Suggested fields:
 - `jobClass`
-- `vaultId`
+- `vaultAddress`
 - `estimatedFee`
 - `quotedRoute`
 - `expectedOut`
@@ -74,7 +75,7 @@ Suggested fields:
 ### `ExecutionReceipt`
 Suggested fields:
 - `jobId`
-- `vaultId`
+- `vaultAddress`
 - `controller`
 - `operator`
 - `paymentReference`
@@ -94,9 +95,18 @@ Suggested fields:
 - `avgSlippageDeltaBps`
 - `policyViolationCount`
 
+In MVP, `failCount` and `policyViolationCount` are expected to be backend-derived analytics rather than native onchain registry counters.
+
+## Canonical identifiers
+- `vaultAddress` is the canonical identifier of a vault in MVP
+- `intentHash` is the canonical identifier of the signed execution request
+- `jobId = keccak256(intentHash, paymentReference)` is the canonical identifier of a paid execution attempt
+
+Because MVP excludes a factory, there is no separate numeric vault ID that needs to be preserved.
+
 ## Signed fields
 The controller signature should cover the typed fields that define the execution request:
-- vault ID
+- vault address
 - controller address
 - token pair
 - amount
@@ -105,6 +115,15 @@ The controller signature should cover the typed fields that define the execution
 - deadline
 
 The signature must not be over a vague or partially backend-generated blob.
+
+## Signature standard
+MVP should use **EIP-712 typed data** with this domain:
+- `name = "X402Operator"`
+- `version = "1"`
+- `chainId = 196`
+- `verifyingContract = vaultAddress`
+
+The backend and the vault must verify the same digest. MVP should assume an EOA controller path first.
 
 ## Replay protections
 The MVP requires both:
@@ -123,7 +142,7 @@ Those can be layered on later by a higher-level controller agent, but not by the
 ## Example `ExecutionIntent`
 ```json
 {
-  "vaultId": 12,
+  "vaultAddress": "0xVault",
   "controller": "0xController",
   "tokenIn": "0xUSDT",
   "tokenOut": "0xETH",
@@ -139,7 +158,7 @@ Those can be layered on later by a higher-level controller agent, but not by the
 ```json
 {
   "jobId": "job_47",
-  "vaultId": 12,
+  "vaultAddress": "0xVault",
   "controller": "0xController",
   "operator": "0xOperator",
   "paymentReference": "0xPayment",

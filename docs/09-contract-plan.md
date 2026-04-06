@@ -18,16 +18,19 @@ This is a deliberate reduction from more ambitious earlier variants.
 ## `OperatorVault.sol`
 ### Responsibilities
 - store vault owner and policy state
+- treat the vault address as the canonical vault identifier
 - store authorized operator
 - store authorized controller addresses
+- verify EIP-712 typed execution intents
 - hold vault capital
 - validate signed intents
 - enforce nonce and deadline rules
 - enforce token, amount, volume, slippage, cooldown, and pause checks
-- execute a constrained swap or rebalance action
+- execute a constrained spot-swap action
 
 ### Suggested conceptual storage
 - owner
+- base token
 - operator
 - allowed controllers
 - allowed tokens
@@ -54,17 +57,18 @@ This is a deliberate reduction from more ambitious earlier variants.
 ### Responsibilities
 - store execution receipt metadata
 - associate receipts with vault IDs and jobs
-- expose a basic operator track record
+- expose a basic success-oriented operator track record
 
 ### Track record fields
 - `successCount`
-- `failCount`
 - `avgSlippageDeltaBps`
-- `policyViolationCount`
+
+`failCount` and `policyViolationCount` may still exist in offchain operator analytics, but they should not be core onchain registry fields in MVP.
 
 ### Suggested receipt fields
 - job ID
 - vault ID
+- vault address
 - controller address
 - operator address
 - payment reference
@@ -92,6 +96,15 @@ They should not try to become a full general-purpose automation framework in MVP
 - one constrained execution function
 - one receipt path
 - enough events and getters to make the console and demo legible
+
+## Signature standard
+MVP should use **EIP-712** typed data with these defaults:
+- `domain.name = "X402Operator"`
+- `domain.version = "1"`
+- `domain.chainId = 196`
+- `domain.verifyingContract = vaultAddress`
+
+MVP should target straightforward EOA verification first and avoid `ERC-1271` complexity unless it becomes necessary.
 
 ## Minimum test plan implied by the design
 The contracts should be written with these tests in mind:

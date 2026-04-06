@@ -5,7 +5,7 @@ The demo should sell one message above all others:
 
 **Delegated execution without surrendering custody.**
 
-Do not present the product as a treasury-rebalancing dashboard. Treasury rebalance is just the first proof point.
+Do not present the product as a treasury-rebalancing dashboard. The first proof point should be a constrained single-swap execution.
 
 ## Demo target length
 - ideal: 90 to 120 seconds
@@ -49,7 +49,7 @@ Do not present the product as a treasury-rebalancing dashboard. Treasury rebalan
 - keep the product identity as infra, not consumer fintech
 
 ## First proof point
-Use a single spot-swap or basic rebalance example in the first demo. The point is not to show financial sophistication. The point is to show the full loop clearly:
+Use a single spot-swap example in the first demo. The point is not to show financial sophistication. The point is to show the full loop clearly:
 - controller decides
 - caller pays
 - operator executes

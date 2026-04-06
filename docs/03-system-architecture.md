@@ -28,6 +28,7 @@ The operator backend is the paid execution service.
 Responsibilities:
 - expose `preview` and `execute` endpoints
 - issue `402 Payment Required` on the paid execution path
+- perform free pre-validation before issuing a paid execution challenge
 - verify the payment and bind it to a specific job
 - validate the controller signature, nonce, and deadline
 - fetch route, quote, and optional market/security context
@@ -82,7 +83,7 @@ The payment flow monetizes execution on a per-request basis.
 Responsibilities:
 - challenge callers before paid execution
 - let other agents consume the operator as a paid API
-- produce a payment event that can be linked to a job
+- produce a payment event that can be linked to a specific signed intent and job
 
 ## End-to-end data flow
 ```text
@@ -91,12 +92,14 @@ owner -> deposit capital
 owner -> set policy
 owner -> authorize operator and controller
 
-controller -> build ExecutionIntent
+controller -> build ExecutionIntent for vaultAddress
 controller -> sign ExecutionIntent
 controller -> call operator /execute
+operator -> pre-validate request
 operator -> return 402 challenge
 controller -> pay execution fee via x402
 operator -> verify payment
+operator -> derive intentHash and jobId
 operator -> verify signature, nonce, deadline, allowlist
 operator -> fetch route and checks
 operator -> call vault execution function
@@ -146,6 +149,7 @@ If the console vanished, the protocol would still exist. If the vault or the pay
 - **Execution boundary:** operator can attempt execution but only through allowed methods
 - **Monetization boundary:** `x402` fee is separate from vault capital
 - **Audit boundary:** registry ties jobs to receipts and track record
+- **Identity boundary:** the canonical vault identifier in MVP is the vault contract address
 
 ## Design constraints
 - The backend cannot be the final source of truth for permissions.

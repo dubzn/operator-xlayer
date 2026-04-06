@@ -22,9 +22,18 @@ The easiest way to think about it is:
 
 The vault is where "yes" or "no" becomes enforceable.
 
+## Canonical identifier
+In MVP, the canonical vault identifier is the **vault contract address**.
+
+That means:
+- API payloads should use `vaultAddress`, not a numeric `vaultId`
+- EIP-712 typed data should bind the intent to that address
+- the absence of a factory is not a problem because the address itself is the stable identifier
+
 ## Core policy fields
 The MVP vault policy should include:
 - `owner`
+- `baseToken`
 - `authorizedOperator`
 - `authorizedControllers`
 - `allowedTokens`
@@ -39,6 +48,7 @@ Optional later additions are possible, but these fields are enough to prove the 
 ## Suggested state model
 The implementation can change details, but conceptually the vault needs state for:
 - owner identity
+- base token identity
 - authorized operator identity
 - controller allowlist
 - allowed token set
@@ -82,8 +92,34 @@ Every execution attempt must validate at least the following:
 - amount is within the single-trade limit
 - daily volume remains under cap
 - cooldown has been respected
-- slippage remains within bounds
+- slippage remains within bounds using the stricter of policy and intent
 - vault is not paused
+
+## Policy semantics
+The following semantics are fixed for MVP to avoid implementation drift:
+
+- **Base token**
+  - Each vault has a `baseToken`.
+  - MVP execution uses `tokenIn = baseToken`.
+  - `tokenOut` must be inside `allowedTokens`.
+
+- **`maxAmountPerTrade`**
+  - Measured in units of `baseToken`.
+  - The operator cannot execute a trade above this cap.
+
+- **`maxDailyVolume`**
+  - Measured in units of `baseToken`.
+  - Accounted using a UTC day bucket, not a rolling 24-hour window.
+  - This keeps contract logic and tests simpler for MVP.
+
+- **`cooldownSeconds`**
+  - Applied per vault, not per token pair.
+  - Once the vault executes, the vault cannot execute another delegated action until the cooldown passes.
+
+- **Slippage**
+  - The intent includes `maxSlippageBps`.
+  - The policy includes `maxSlippageBps`.
+  - The effective bound is `min(policy.maxSlippageBps, intent.maxSlippageBps)`.
 
 ## Proposed MVP methods
 The exact function names can change, but the vault should conceptually expose:
@@ -117,7 +153,7 @@ For MVP, the vault should stay intentionally narrow:
 - one operator address
 - one or a small set of controller addresses
 - spot-swap execution path first
-- rebalance support only if it can be added without weakening clarity
+- no native rebalance path in MVP
 - no generalized plugin execution inside the vault
 - no complex asset-risk taxonomy inside the vault itself
 

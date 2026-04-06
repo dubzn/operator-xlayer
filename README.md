@@ -15,8 +15,8 @@ This is **not** a trading bot, a marketplace, or a generic paywalled API. It is 
 ## Core loop
 1. A vault owner creates or initializes a vault and deposits capital.
 2. The owner defines policy guardrails and authorizes an operator and controller agent.
-3. A controller agent requests an action by signing an `ExecutionIntent`.
-4. The controller pays the operator's service fee via `x402`.
+3. A controller agent requests an action by signing an `ExecutionIntent` bound to the vault address.
+4. The operator performs free pre-validation, then the controller pays the operator's service fee via `x402`.
 5. The operator validates the payment and the intent, fetches quotes and checks, and calls the vault.
 6. The vault enforces policy constraints onchain and executes only valid operations.
 7. The registry records an execution receipt and updates the operator track record.

@@ -6,7 +6,7 @@
 - one vault contract
 - one execution registry contract
 - spot swaps on X Layer
-- one concrete use case: single swap first, rebalance only if straightforward
+- one concrete use case: single swap only
 - `x402`-protected execution endpoint
 - one lightweight console for vault policy and receipts
 
@@ -30,6 +30,7 @@ Earlier versions of the idea risked becoming too large for the hackathon. The MV
 - controller model: one authorized controller address per demo vault
 - contracts: `OperatorVault.sol` and `ExecutionRegistry.sol`
 - frontend: minimal console, not a marketing-heavy app
+- canonical vault identifier: vault contract address
 
 ## First implementation slice
 If time gets tight, the first implementation slice should still include:
