@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+artifacts/
+cache/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+pnpm-lock.yaml
+package-lock.json
+.yarn/
