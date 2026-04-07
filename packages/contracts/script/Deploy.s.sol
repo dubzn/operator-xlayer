@@ -8,10 +8,10 @@ import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
 contract Deploy is Script {
     function run() external {
         address owner = vm.envAddress("VAULT_OWNER");
+        address baseToken = vm.envAddress("BASE_TOKEN");
         address operator = vm.envAddress("OPERATOR_ADDRESS");
         address trustedRouter = vm.envAddress("TRUSTED_ROUTER");
         address controller = vm.envAddress("CONTROLLER_ADDRESS");
-        address tokenIn = vm.envAddress("TOKEN_IN");
         address tokenOut = vm.envAddress("TOKEN_OUT");
         uint256 maxPerTrade = vm.envUint("MAX_PER_TRADE");
         uint256 maxDailyVolume = vm.envUint("MAX_DAILY_VOLUME");
@@ -25,6 +25,7 @@ contract Deploy is Script {
 
         OperatorVault vault = new OperatorVault(
             owner,
+            baseToken,
             operator,
             trustedRouter,
             maxPerTrade,
@@ -34,12 +35,15 @@ contract Deploy is Script {
         );
         console.log("OperatorVault:", address(vault));
 
+        registry.authorizeVault(address(vault));
+        console.log("Vault authorized in registry:", address(vault));
+
         vault.authorizeController(controller);
-        vault.addAllowedToken(tokenIn);
         vault.addAllowedToken(tokenOut);
 
         console.log("Controller authorized:", controller);
-        console.log("Tokens allowed:", tokenIn, tokenOut);
+        console.log("Base token:", baseToken);
+        console.log("Allowed token out:", tokenOut);
 
         vm.stopBroadcast();
     }

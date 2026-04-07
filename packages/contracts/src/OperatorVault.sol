@@ -30,6 +30,7 @@ contract OperatorVault is EIP712 {
     // --- State ---
 
     address public owner;
+    address public baseToken;
     address public authorizedOperator;
     address public trustedRouter;
     uint256 public maxAmountPerTrade;
@@ -72,9 +73,11 @@ contract OperatorVault is EIP712 {
     error OnlyOwner();
     error OnlyOperator();
     error UnauthorizedController(address controller);
+    error ControllerMismatch(address claimedController, address recoveredController);
     error NonceAlreadyUsed(uint256 nonce);
     error IntentExpired(uint256 deadline);
     error TokenNotAllowed(address token);
+    error InvalidBaseToken(address tokenIn, address expectedBaseToken);
     error AmountExceedsLimit(uint256 amount, uint256 max);
     error VaultAddressMismatch();
     error SwapFailed();
@@ -99,6 +102,7 @@ contract OperatorVault is EIP712 {
 
     constructor(
         address _owner,
+        address _baseToken,
         address _operator,
         address _trustedRouter,
         uint256 _maxAmountPerTrade,
@@ -107,6 +111,7 @@ contract OperatorVault is EIP712 {
         uint256 _cooldownSeconds
     ) EIP712("X402Operator", "1") {
         owner = _owner;
+        baseToken = _baseToken;
         authorizedOperator = _operator;
         trustedRouter = _trustedRouter;
         maxAmountPerTrade = _maxAmountPerTrade;
@@ -191,6 +196,10 @@ contract OperatorVault is EIP712 {
         bytes32 digest = _hashTypedDataV4(structHash);
         address recoveredController = ECDSA.recover(digest, signature);
 
+        if (intent.controller != recoveredController) {
+            revert ControllerMismatch(intent.controller, recoveredController);
+        }
+
         if (!authorizedControllers[recoveredController]) {
             revert UnauthorizedController(recoveredController);
         }
@@ -203,7 +212,7 @@ contract OperatorVault is EIP712 {
         if (block.timestamp > intent.deadline) revert IntentExpired(intent.deadline);
 
         // 5. Token allowlist check
-        if (!allowedTokens[intent.tokenIn]) revert TokenNotAllowed(intent.tokenIn);
+        if (intent.tokenIn != baseToken) revert InvalidBaseToken(intent.tokenIn, baseToken);
         if (!allowedTokens[intent.tokenOut]) revert TokenNotAllowed(intent.tokenOut);
 
         // 6. Amount limit check

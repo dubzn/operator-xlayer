@@ -4,6 +4,7 @@ import type { ExecutionIntent } from "@x402-operator/shared";
 import { config, getOperatorWallet } from "../config.js";
 import { OperatorVaultABI } from "../abi.js";
 import { getSwapQuote } from "./onchainos.js";
+import { isZeroAddress } from "../middleware/x402.js";
 
 export interface ExecutionResult {
   jobId: string;
@@ -35,6 +36,19 @@ export async function executeIntent(
     config.vaultAddress
   );
 
+  if (quote.routeData === "0x") {
+    throw new Error("Trade route unavailable: OnchainOS integration is still returning stub routeData");
+  }
+
+  if (BigInt(quote.expectedOut) <= 0n) {
+    throw new Error("Trade quote unavailable: expected output must be greater than zero");
+  }
+
+  const trustedRouter = String(await vault.trustedRouter());
+  if (!isZeroAddress(quote.routerAddress) && quote.routerAddress.toLowerCase() !== trustedRouter.toLowerCase()) {
+    throw new Error("Quoted router does not match vault trustedRouter");
+  }
+
   // 2. Compute jobId for tracking
   const intentHash = hashIntent(intent);
   const paymentRefBytes = ethers.zeroPadValue(paymentRef, 32);
@@ -52,8 +66,12 @@ export async function executeIntent(
     intent.deadline,
   ];
 
-  // Compute minAmountOut from quote (Phase 2: use slippage bounds)
-  const minAmountOut = 0; // TODO: compute from quote.expectedOut and effective slippage
+  const policyMaxSlippageBps = BigInt(await vault.maxSlippageBps());
+  const effectiveSlippageBps = policyMaxSlippageBps < BigInt(intent.maxSlippageBps)
+    ? policyMaxSlippageBps
+    : BigInt(intent.maxSlippageBps);
+  const expectedOut = BigInt(quote.expectedOut);
+  const minAmountOut = (expectedOut * (10000n - effectiveSlippageBps)) / 10000n;
 
   const tx = await vault.executeSwap(
     intentTuple,

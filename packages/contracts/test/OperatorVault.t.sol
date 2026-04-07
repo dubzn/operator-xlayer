@@ -44,6 +44,7 @@ contract OperatorVaultTest is Test {
 
         vault = new OperatorVault(
             vaultOwner,
+            address(usdt),
             operator,
             address(dex),
             MAX_PER_TRADE,
@@ -54,13 +55,14 @@ contract OperatorVaultTest is Test {
 
         vm.startPrank(vaultOwner);
         vault.authorizeController(controller);
-        vault.addAllowedToken(address(usdt));
         vault.addAllowedToken(address(weth));
 
         usdt.mint(vaultOwner, 5000e6);
         usdt.approve(address(vault), 5000e6);
         vault.deposit(address(usdt), 5000e6);
         vm.stopPrank();
+
+        registry.authorizeVault(address(vault));
     }
 
     // --- Helpers ---
@@ -194,7 +196,26 @@ contract OperatorVaultTest is Test {
         bytes memory routeData = _buildRouteData(SWAP_AMOUNT, SWAP_OUT);
 
         vm.prank(operator);
-        vm.expectRevert(abi.encodeWithSelector(OperatorVault.TokenNotAllowed.selector, address(badToken)));
+        vm.expectRevert(abi.encodeWithSelector(OperatorVault.InvalidBaseToken.selector, address(badToken), address(usdt)));
+        vault.executeSwap(intent, routeData, sig, bytes32(uint256(1)), address(registry), 0);
+    }
+
+    function test_revert_controllerMismatch() public {
+        OperatorVault.ExecutionIntent memory intent = OperatorVault.ExecutionIntent({
+            vaultAddress: address(vault),
+            controller: randomUser,
+            tokenIn: address(usdt),
+            tokenOut: address(weth),
+            amount: SWAP_AMOUNT,
+            maxSlippageBps: 200,
+            nonce: 1,
+            deadline: block.timestamp + 300
+        });
+        bytes memory sig = _signIntent(intent, controllerKey);
+        bytes memory routeData = _buildRouteData(SWAP_AMOUNT, SWAP_OUT);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSelector(OperatorVault.ControllerMismatch.selector, randomUser, controller));
         vault.executeSwap(intent, routeData, sig, bytes32(uint256(1)), address(registry), 0);
     }
 
@@ -230,6 +251,27 @@ contract OperatorVaultTest is Test {
         assertEq(receipt.amountIn, SWAP_AMOUNT);
         assertEq(receipt.amountOut, SWAP_OUT);
         assertTrue(receipt.success);
+        assertEq(registry.getTrackRecord(operator), 1);
+    }
+
+    function test_registryRejectsUnauthorizedRecorder() public {
+        ExecutionRegistry.Receipt memory receipt = ExecutionRegistry.Receipt({
+            jobId: bytes32(uint256(123)),
+            vault: address(vault),
+            controller: controller,
+            operator: operator,
+            paymentRef: bytes32(uint256(1)),
+            tokenIn: address(usdt),
+            tokenOut: address(weth),
+            amountIn: SWAP_AMOUNT,
+            amountOut: SWAP_OUT,
+            timestamp: block.timestamp,
+            success: true
+        });
+
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSelector(ExecutionRegistry.UnauthorizedRecorder.selector, randomUser));
+        registry.recordReceipt(receipt);
     }
 
     // --- Phase 2 Tests ---
@@ -261,18 +303,19 @@ contract OperatorVaultTest is Test {
         // We need 30 swaps to hit 3000, but the 31st should fail
         // For efficiency, let's use a vault with lower daily volume
         OperatorVault smallVault = new OperatorVault(
-            vaultOwner, operator, address(dex),
+            vaultOwner, address(usdt), operator, address(dex),
             MAX_PER_TRADE, 250e6, MAX_SLIPPAGE_BPS, 0 // dailyVolume=250, cooldown=0
         );
 
         vm.startPrank(vaultOwner);
         smallVault.authorizeController(controller);
-        smallVault.addAllowedToken(address(usdt));
         smallVault.addAllowedToken(address(weth));
         usdt.mint(vaultOwner, 5000e6);
         usdt.approve(address(smallVault), 5000e6);
         smallVault.deposit(address(usdt), 5000e6);
         vm.stopPrank();
+
+        registry.authorizeVault(address(smallVault));
 
         // Execute 2 swaps of 100 each = 200 used
         for (uint256 i = 1; i <= 2; i++) {
