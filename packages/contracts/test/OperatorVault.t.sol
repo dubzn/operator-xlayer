@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {OperatorVault} from "../src/OperatorVault.sol";
 import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
+import {IExecutionRegistry} from "../src/interfaces/IExecutionRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockDEX} from "./mocks/MockDEX.sol";
 
@@ -242,7 +243,7 @@ contract OperatorVaultTest is Test {
     function test_receiptRecorded() public {
         bytes32 jobId = _executeValidSwap(99);
 
-        ExecutionRegistry.Receipt memory receipt = registry.getReceipt(jobId);
+        IExecutionRegistry.Receipt memory receipt = registry.getReceipt(jobId);
         assertEq(receipt.vault, address(vault));
         assertEq(receipt.controller, controller);
         assertEq(receipt.operator, operator);
@@ -255,7 +256,7 @@ contract OperatorVaultTest is Test {
     }
 
     function test_registryRejectsUnauthorizedRecorder() public {
-        ExecutionRegistry.Receipt memory receipt = ExecutionRegistry.Receipt({
+        IExecutionRegistry.Receipt memory receipt = IExecutionRegistry.Receipt({
             jobId: bytes32(uint256(123)),
             vault: address(vault),
             controller: controller,
