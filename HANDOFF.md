@@ -4,36 +4,43 @@
 
 ### Contratos (Foundry) — `packages/contracts/`
 
-**OperatorVault.sol** — Contrato core, completo.
+**OperatorVault.sol** — Contrato core, bastante avanzado.
 - Custodia fondos del owner con policy enforcement
-- `executeSwap()` con 9 validaciones onchain:
+- `executeSwap()` hace las validaciones onchain del MVP:
   1. Vault no pausado
   2. Vault address match
-  3. EIP-712 signature recovery → controller autorizado
-  4. Nonce no reusado
-  5. Deadline no expirado
-  6. Tokens en allowlist
-  7. Amount <= maxAmountPerTrade
-  8. Daily volume <= maxDailyVolume (reset por UTC day bucket)
-  9. Cooldown entre ejecuciones
-  10. Slippage post-swap (minAmountOut)
+  3. EIP-712 signature recovery
+  4. `intent.controller` debe coincidir con el signer recuperado
+  5. Controller autorizado
+  6. Nonce no reusado
+  7. Deadline no expirado
+  8. `tokenIn = baseToken`
+  9. `tokenOut` en allowlist
+  10. Amount <= maxAmountPerTrade
+  11. Daily volume <= maxDailyVolume (UTC day bucket)
+  12. Cooldown entre ejecuciones
+  13. Slippage post-swap (`minAmountOut`)
 - Owner functions: deposit, withdraw, pause/unpause, authorizeController, revokeController, addAllowedToken, removeAllowedToken, updatePolicy
 - Swap ejecuta via `trustedRouter.call(routeData)` — el router está hardcodeado en el vault por seguridad
-- Auto-registra receipt en ExecutionRegistry después del swap
+- Auto-registra success receipt en `ExecutionRegistry`
 - EIP-712 domain: `{name: "X402Operator", version: "1", chainId: 196, verifyingContract: vaultAddress}`
 
 **ExecutionRegistry.sol** — Minimal, funcional.
-- Guarda receipts por jobId
+- Guarda receipts por `jobId`
 - `recordReceipt()` + `getReceipt()` + evento `ReceiptRecorded`
-- Sin access control todavía (cualquiera puede llamar recordReceipt)
+- Tiene access control: solo vaults autorizados pueden grabar receipts
+- Lleva `successCount` simple por operator
 
-**Tests** — 15/15 pasan (`forge test`)
-- 8 tests Phase 1: ejecución válida, operator no autorizado, controller no autorizado, nonce reusado, deadline expirado, token no permitido, amount excedido, receipt grabado
-- 7 tests Phase 2: pause, unpause, daily volume excedido, cooldown no cumplido, cooldown pasa después de esperar, slippage excedido, daily volume se resetea al día siguiente
+**Tests**
+- Los tests del contrato fueron ampliados para cubrir controller mismatch, access control del registry y success count.
+- En este workspace, **no pude re-verificar `forge test` localmente** porque Foundry no tiene todavía el compilador `solc 0.8.24` instalado y `packages/contracts/lib/` no está bootstrappeado.
 
-**Deploy script** — `script/Deploy.s.sol`, lee config de env vars.
+**Deploy script** — `script/Deploy.s.sol`
+- Lee `BASE_TOKEN`
+- Autoriza el vault en el registry
+- Trata `baseToken` y `allowed tokenOut` según la spec cerrada
 
-**Config:** Foundry con `via_ir = true` (necesario por stack depth), Solidity 0.8.24, OpenZeppelin contracts.
+**Config:** Foundry con `via_ir = true`, Solidity 0.8.24, `libs = ["lib"]`.
 
 ---
 
@@ -41,125 +48,141 @@
 
 Tipos y utilidades compartidas entre backend y agent:
 
-- **types.ts**: `ExecutionIntent`, `ExecutionReceipt`, `ExecuteRequest`, `ExecuteResponse`, `PaymentChallenge`
+- **types.ts**: `ExecutionIntent`, `ExecutionReceipt`, `ExecuteRequest`, `ExecuteResponse`, `PreviewRequest`, `ExecutionPreview`, `TrackRecord`, `PaymentChallenge`
 - **eip712.ts**: `signIntent()`, `recoverIntentSigner()`, `hashIntent()`, `computeJobId()`, `getDomain()`, constantes EIP-712
 
-Compila con `npx tsc --project packages/shared/tsconfig.json`.
+Compila con `npm run build -w @x402-operator/shared`.
 
 ---
 
 ### Backend — `packages/backend/`
 
-Express server con un endpoint:
+Express server con estos endpoints:
 
-- **POST /execute** — Flow completo:
-  1. x402 middleware: si no hay `paymentReference` → responde 402 con fee details
-  2. Si hay payment → verifica tx onchain (busca Transfer event al operator)
-  3. Valida intent offchain (signature, controller allowlist, nonce, deadline, tokens, amount)
-  4. Llama OnchainOS Trade API → obtiene routeData (⚠️ **STUB**, ver abajo)
-  5. Llama `vault.executeSwap()` onchain
-  6. Retorna `{status, jobId, txHash}`
+- **POST /preview**
+  1. Lee vault state y policy
+  2. Corre un preflight informativo sin cobrar
+  3. Devuelve fee estimado, route summary, policy check summary, warnings y expiry
+  4. Hoy sigue siendo parcialmente informativo porque `onchainos.ts` todavía es stub
 
-- **GET /health** — Health check
+- **POST /execute**
+  1. Hace free pre-validation antes del cobro
+  2. Si falta `paymentReference` → responde `402`
+  3. Si hay payment → verifica tx onchain con chequeo de token, payer esperado, recipient operator y amount mínimo
+  4. Bloquea reuse obvio del mismo `paymentReference` dentro de la misma instancia backend
+  5. Valida intent offchain (signature, controller, nonce, deadline, `baseToken`, allowlist, amount, daily volume, cooldown, pause)
+  6. Llama OnchainOS Trade API stub → obtiene `routeData`
+  7. Calcula `minAmountOut` usando `min(policy, intent)` para slippage
+  8. Llama `vault.executeSwap()` onchain
+  9. Retorna `{status, jobId, txHash}`
+
+- **GET /receipts/:jobId**
+  - Lee el receipt del registry
+
+- **GET /operator/track-record**
+  - Lee `successCount` del registry
+
+- **GET /health**
+  - Health check
 
 **Archivos clave:**
 - `src/config.ts` — env vars, provider, operator wallet
 - `src/abi.ts` — ABIs human-readable del vault, registry y ERC20
 - `src/middleware/x402.ts` — Challenge 402 + verificación de pago onchain
-- `src/services/intentValidator.ts` — Validación offchain (gas-saving filter)
+- `src/services/intentValidator.ts` — Validación offchain + snapshot de policy
 - `src/services/onchainExecutor.ts` — Arma y envía la tx al vault
 - `src/services/onchainos.ts` — ⚠️ **STUB** — devuelve routeData vacío
+- `src/services/paymentLedger.ts` — guardia MVP en memoria contra reuse de payment references
 
-Compila con `npx tsc --project packages/backend/tsconfig.json --noEmit`.
+Compila con `npm run build -w @x402-operator/backend`.
 
 ---
 
 ### Demo Agent — `packages/agent/`
 
 Script `src/run.ts` que ejecuta el flow completo:
-1. Construye ExecutionIntent
+1. Construye `ExecutionIntent`
 2. Firma EIP-712
-3. POST /execute → recibe 402
+3. POST `/execute` → recibe `402`
 4. Paga el fee (transfer ERC20 al operator)
-5. Re-POST /execute con paymentReference
+5. Re-POST `/execute` con `paymentReference`
 6. Imprime resultado
+
+Typecheck: `npm run typecheck -w @x402-operator/agent`
 
 ---
 
-## Qué falta hacer
+## Qué sigue faltando
 
-### Crítico para que funcione end-to-end
+### Crítico para que funcione end-to-end real
 
 1. **Wiring OnchainOS Trade API** — `packages/backend/src/services/onchainos.ts`
    - Hoy es un stub que devuelve `routeData: "0x"`
-   - Hay que llamar a la Trade API real de OnchainOS para obtener route + quote + calldata
-   - El routeData debe ser compatible con el `trustedRouter` del vault
-   - Docs: https://web3.okx.com/onchainos/dev-docs/home/what-is-onchainos
+   - Falta quote real + calldata real compatible con `trustedRouter`
 
-2. **Deploy a X Layer testnet**
-   - Necesitamos RPC endpoint, OKB para gas, y addresses de tokens (USDT, WETH en X Layer)
-   - El DEX router address hay que sacarlo de OnchainOS o de un DEX en X Layer
-   - Configurar `.env` con las addresses reales
+2. **Bootstrapping de Foundry en esta máquina**
+   - falta `solc 0.8.24`
+   - falta `packages/contracts/lib/` con dependencias (`forge-std`, `openzeppelin-contracts`)
+   - hasta eso, `forge build/test` no se puede verificar localmente acá
+
+3. **Deploy a X Layer testnet / mainnet**
+   - RPC real
+   - OKB para gas
+   - addresses reales de tokens y router
+   - `.env` reales para backend y agent
 
 ### Mejoras pendientes
 
-3. **POST /preview** — Endpoint free que devuelve quote + policy check + warnings
-4. **GET /receipts/:jobId** — Leer receipt del registry
-5. **GET /operator/track-record** — Track record del operator
-6. **Registry access control** — Restringir quién puede llamar `recordReceipt()`
-7. **Track record counters en registry** — `successCount`, `avgSlippageDeltaBps` por operator
-8. **Consola web** — UI read-only mostrando vault state, receipts, track record
-9. **minAmountOut real** — En `onchainExecutor.ts` hay un `TODO` para computar minAmountOut desde el quote y el slippage
+4. **Persistencia real para payment references**
+   - hoy el anti-replay de payments es solo in-memory
+   - sobrevive al proceso, no a reinicios ni a múltiples réplicas backend
+
+5. **Binding pago ↔ intent más fuerte**
+   - hoy el backend verifica que hubo un fee payment válido del controller al operator
+   - pero ese pago todavía no queda ligado criptográficamente al `intentHash`
+   - para MVP sirve como approximation, pero no es el binding ideal de largo plazo
+
+6. **Receipt más rico si hace falta**
+   - hoy el registry onchain guarda success receipts compactos
+   - campos como `executionTxHash` o analytics richer siguen siendo offchain / abiertos
+
+7. **Consola web**
+   - UI read-only mostrando vault state, receipts, track record
+
+8. **OnchainOS Market/Security**
+   - opcional para enriquecer preview y warnings
 
 ---
-
-## Estructura del repo
-
-```
-operator-xlayer/
-  docs/                          # 17 docs de diseño
-  packages/
-    contracts/                   # Foundry — forge build / forge test
-      src/
-        OperatorVault.sol
-        ExecutionRegistry.sol
-        interfaces/IExecutionRegistry.sol
-      test/
-        OperatorVault.t.sol      # 15 tests
-        mocks/MockDEX.sol, MockERC20.sol
-      script/Deploy.s.sol
-    shared/                      # TS types + EIP-712 utils
-      src/types.ts, eip712.ts, index.ts
-    backend/                     # Express server
-      src/index.ts, config.ts, abi.ts
-      src/routes/execute.ts
-      src/middleware/x402.ts
-      src/services/intentValidator.ts, onchainExecutor.ts, onchainos.ts
-    agent/                       # Demo controller script
-      src/run.ts
-  package.json                   # npm workspaces
-```
 
 ## Cómo correr
 
 ```bash
-# Contratos
+# Root checks
+npm install
+npm run build
+npm run typecheck
+
+# Contratos (cuando Foundry esté bootstrappeado)
 cd packages/contracts
 forge build
 forge test -vvv
 
-# Backend (necesita .env configurado)
+# Backend
 cd packages/backend
 cp .env.example .env
 # editar .env con values reales
 npx tsx src/index.ts
 
-# Agent (necesita .env configurado + backend corriendo)
+# Agent
 cd packages/agent
 cp .env.example .env
 # editar .env
 npx tsx src/run.ts
 ```
+
+## Nota importante sobre lints
+
+Hoy el repo tiene **build** y **typecheck**, pero **no tiene ESLint/Biome configurado todavía**. Si alguien habla de "lint", en la práctica hoy se refiere más a typechecking que a un linter de estilo real.
 
 ## Decisiones técnicas importantes
 
@@ -167,8 +190,11 @@ npx tsx src/run.ts
 |---|---|---|
 | `trustedRouter` en vault | Hardcodeado, no viene como param | Previene que el operator llame contratos arbitrarios |
 | `routeData` no firmado | Controller firma solo los bounds | La ruta la prepara el backend después de la firma |
-| `minAmountOut` como param | Backend lo computa y lo pasa | El vault valida post-swap que amountOut >= minAmountOut |
-| Cooldown skip en primera ejecución | `lastExecution > 0` check | Si no, el primer swap siempre falla |
-| `via_ir = true` en Foundry | Habilitado en foundry.toml | Necesario por stack-too-deep en executeSwap |
-| x402 Phase 1 | Simple 402 + verificación de tx hash | Refinar con spec x402 real después |
+| `baseToken` | `tokenIn` debe ser `baseToken` | Alineado con la spec cerrada del MVP |
+| controller binding | `intent.controller` debe igualar al signer recuperado | Evita que el operator presente una firma válida con otro controller declarado |
+| `minAmountOut` como param | Backend lo computa y lo pasa | El vault valida post-swap que `amountOut >= minAmountOut` |
+| cooldown | Per-vault | Alineado con la spec cerrada |
+| daily volume | UTC day bucket | Simplifica contrato y tests del MVP |
+| x402 execute flow | Pre-validación gratis antes del 402 | Alineado con docs |
+| payment replay guard | En memoria por ahora | Cierra el hueco obvio en MVP, aunque todavía no es persistente |
 | jobId | `keccak256(intentHash, paymentRef)` | Canónico entre contrato y backend |

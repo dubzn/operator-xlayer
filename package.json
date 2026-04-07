@@ -1,6 +1,12 @@
 {
   "name": "x402-operator",
   "private": true,
+  "scripts": {
+    "build": "npm run build -w @x402-operator/shared && npm run build -w @x402-operator/backend",
+    "typecheck": "npm run typecheck -w @x402-operator/shared && npm run typecheck -w @x402-operator/backend && npm run typecheck -w @x402-operator/agent",
+    "contracts:build": "cd packages/contracts && forge build",
+    "contracts:test": "cd packages/contracts && forge test -vvv"
+  },
   "workspaces": [
     "packages/shared",
     "packages/backend",
