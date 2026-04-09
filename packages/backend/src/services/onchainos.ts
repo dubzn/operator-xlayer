@@ -76,7 +76,7 @@ async function getOkxSwapQuote(
     fromTokenAddress: tokenIn,
     toTokenAddress: tokenOut,
     amount: amountIn,
-    slippage,
+    slippagePercent: slippage,
     userWalletAddress: vaultAddress,
   });
 

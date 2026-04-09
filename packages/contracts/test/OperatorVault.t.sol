@@ -48,6 +48,7 @@ contract OperatorVaultTest is Test {
             address(usdt),
             operator,
             address(dex),
+            address(0),
             MAX_PER_TRADE,
             MAX_DAILY_VOLUME,
             MAX_SLIPPAGE_BPS,
@@ -304,7 +305,7 @@ contract OperatorVaultTest is Test {
         // We need 30 swaps to hit 3000, but the 31st should fail
         // For efficiency, let's use a vault with lower daily volume
         OperatorVault smallVault = new OperatorVault(
-            vaultOwner, address(usdt), operator, address(dex),
+            vaultOwner, address(usdt), operator, address(dex), address(0),
             MAX_PER_TRADE, 250e6, MAX_SLIPPAGE_BPS, 0 // dailyVolume=250, cooldown=0
         );
 

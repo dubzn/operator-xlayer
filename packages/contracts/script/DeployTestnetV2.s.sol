@@ -29,7 +29,8 @@ contract DeployTestnetV2 is Script {
         VaultFactory factory = new VaultFactory(
             address(registry),
             deployer,          // operator
-            address(router)    // trustedRouter
+            address(router),   // trustedRouter
+            address(0)         // approvalTarget defaults to router
         );
         console.log("VaultFactory:", address(factory));
 

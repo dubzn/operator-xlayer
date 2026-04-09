@@ -13,7 +13,7 @@ contract DeployFactory is Script {
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
-        VaultFactory factory = new VaultFactory(registry, operator, router);
+        VaultFactory factory = new VaultFactory(registry, operator, router, address(0));
         console.log("VaultFactory:", address(factory));
 
         vm.stopBroadcast();

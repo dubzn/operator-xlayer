@@ -10,6 +10,7 @@ contract VaultFactory {
     IExecutionRegistry public immutable registry;
     address public immutable operator;
     address public immutable trustedRouter;
+    address public immutable approvalTarget;
 
     address[] public vaults;
     mapping(address => address[]) public vaultsByOwner;
@@ -23,11 +24,13 @@ contract VaultFactory {
     constructor(
         address _registry,
         address _operator,
-        address _trustedRouter
+        address _trustedRouter,
+        address _approvalTarget
     ) {
         registry = IExecutionRegistry(_registry);
         operator = _operator;
         trustedRouter = _trustedRouter;
+        approvalTarget = _approvalTarget;
     }
 
     /// @notice Deploy a new vault. Caller becomes the owner.
@@ -43,6 +46,7 @@ contract VaultFactory {
             baseToken,
             operator,        // shared operator across all vaults
             trustedRouter,   // shared router across all vaults
+            approvalTarget,  // DEX token approval contract
             maxAmountPerTrade,
             maxDailyVolume,
             maxSlippageBps,

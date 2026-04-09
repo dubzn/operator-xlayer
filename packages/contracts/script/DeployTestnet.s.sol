@@ -37,6 +37,7 @@ contract DeployTestnet is Script {
             usdt,           // baseToken (USDT)
             deployer,       // operator (same wallet for testnet)
             address(router),// trustedRouter
+            address(0),     // approvalTarget defaults to router
             maxPerTrade,
             maxDailyVolume,
             maxSlippageBps,

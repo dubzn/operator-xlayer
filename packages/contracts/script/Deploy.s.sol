@@ -28,6 +28,7 @@ contract Deploy is Script {
             baseToken,
             operator,
             trustedRouter,
+            address(0),
             maxPerTrade,
             maxDailyVolume,
             maxSlippageBps,

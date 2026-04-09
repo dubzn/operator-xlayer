@@ -3,9 +3,9 @@ export const CHAIN_ID = 196;
 export const RPC_URL = "https://rpc.xlayer.tech";
 
 export const ADDRESSES = {
-  factory: "0x22188933120f63Ea6EAd700fFc967bdB0db88A79" as `0x${string}`,
-  registry: "0x652cc79a37Ef6c9CD76179c6238A6C4CC3018493" as `0x${string}`,
-  router: "0xbec6d0E341102732e4FD62EC50E2F0a9D1bd1D33" as `0x${string}`,
+  factory: "0xBdfa7bc586cC403269D1Cbc8db99E56a998bdF2D" as `0x${string}`,
+  registry: "0x0790A95fD0EC1129F3ffb6dF13A9Ace3f7A199F1" as `0x${string}`,
+  router: "0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954" as `0x${string}`,
   usdt: "0x1E4a5963aBFD975d8c9021ce480b42188849D41d" as `0x${string}`,
   usdc: "0x74b7F16337b8972027F6196A17a631aC6dE26d22" as `0x${string}`,
 } as const;

@@ -14,8 +14,10 @@ contract DeployMainnet is Script {
         address usdt = 0x1E4a5963aBFD975d8c9021ce480b42188849D41d;
         address usdc = 0x74b7F16337b8972027F6196A17a631aC6dE26d22;
 
-        // OKX DEX router on X Layer mainnet
-        address okxDexRouter = 0xbec6d0E341102732e4FD62EC50E2F0a9D1bd1D33;
+        // OKX DEX aggregation proxy on X Layer mainnet
+        address okxDexRouter = 0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954;
+        // OKX DEX token approval contract (separate from router)
+        address okxApprovalTarget = 0x8b773D83bc66Be128c60e07E17C8901f7a64F000;
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
@@ -27,7 +29,8 @@ contract DeployMainnet is Script {
         VaultFactory factory = new VaultFactory(
             address(registry),
             deployer,          // operator
-            okxDexRouter       // trustedRouter = OKX DEX router
+            okxDexRouter,      // trustedRouter = OKX DEX aggregation proxy
+            okxApprovalTarget  // OKX DEX token approval contract
         );
         console.log("VaultFactory:", address(factory));
 

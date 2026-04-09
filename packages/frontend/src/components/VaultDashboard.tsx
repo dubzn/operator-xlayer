@@ -28,6 +28,13 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
   const [depositAmount, setDepositAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copyVaultAddress = () => {
+    navigator.clipboard.writeText(vault);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const exec = async (label: string, fn: () => Promise<`0x${string}`>) => {
     setBusy(label);
@@ -57,7 +64,9 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
     <div className="dashboard">
       <div className="dashboard-header">
         <h2>Vault Dashboard</h2>
-        <div className="vault-address">{shortAddr(vault)}</div>
+        <div className="vault-address" onClick={copyVaultAddress} title="Click to copy" style={{ cursor: "pointer" }}>
+          {shortAddr(vault)} {copied ? <span className="copied-badge">Copied!</span> : <span className="copy-icon">&#x2398;</span>}
+        </div>
         <span className={`status-badge ${data.paused ? "paused" : "active"}`}>
           {data.paused ? "PAUSED" : "ACTIVE"}
         </span>
@@ -135,7 +144,9 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
                 className="btn btn-primary"
                 disabled={busy !== null}
                 onClick={() => {
-                  const amount = BigInt(parseFloat(depositAmount) * 1e6);
+                  const parsed = parseFloat(depositAmount);
+                  if (!parsed || parsed <= 0) return;
+                  const amount = BigInt(Math.round(parsed * 1e6));
                   exec("deposit", async () => {
                     // Approve first
                     const approveHash = await walletClient.writeContract({

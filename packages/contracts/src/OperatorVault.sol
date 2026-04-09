@@ -33,6 +33,7 @@ contract OperatorVault is EIP712 {
     address public baseToken;
     address public authorizedOperator;
     address public trustedRouter;
+    address public approvalTarget; // DEX token approval contract (may differ from router)
     uint256 public maxAmountPerTrade;
     uint256 public maxDailyVolume;
     uint256 public maxSlippageBps;
@@ -105,6 +106,7 @@ contract OperatorVault is EIP712 {
         address _baseToken,
         address _operator,
         address _trustedRouter,
+        address _approvalTarget,
         uint256 _maxAmountPerTrade,
         uint256 _maxDailyVolume,
         uint256 _maxSlippageBps,
@@ -114,6 +116,7 @@ contract OperatorVault is EIP712 {
         baseToken = _baseToken;
         authorizedOperator = _operator;
         trustedRouter = _trustedRouter;
+        approvalTarget = _approvalTarget == address(0) ? _trustedRouter : _approvalTarget;
         maxAmountPerTrade = _maxAmountPerTrade;
         maxDailyVolume = _maxDailyVolume;
         maxSlippageBps = _maxSlippageBps;
@@ -238,7 +241,7 @@ contract OperatorVault is EIP712 {
         // --- Execute swap through trusted router ---
         uint256 balanceBefore = IERC20(intent.tokenOut).balanceOf(address(this));
 
-        IERC20(intent.tokenIn).approve(trustedRouter, intent.amount);
+        IERC20(intent.tokenIn).approve(approvalTarget, intent.amount);
         (bool success,) = trustedRouter.call(routeData);
         if (!success) revert SwapFailed();
 

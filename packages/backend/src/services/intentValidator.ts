@@ -44,35 +44,20 @@ export async function readIntentPolicySnapshot(
     throw new Error("Failed to fetch latest block for validation");
   }
 
-  const [
-    controllerAuthorized,
-    nonceUsed,
-    tokenOutAllowed,
-    baseToken,
-    maxAmountPerTrade,
-    maxDailyVolume,
-    maxSlippageBps,
-    currentDay,
-    dailyVolumeUsed,
-    lastExecution,
-    cooldownSeconds,
-    paused,
-    trustedRouter,
-  ] = await Promise.all([
-    vault.authorizedControllers(intent.controller),
-    vault.usedNonces(intent.nonce),
-    vault.allowedTokens(intent.tokenOut),
-    vault.baseToken(),
-    vault.maxAmountPerTrade(),
-    vault.maxDailyVolume(),
-    vault.maxSlippageBps(),
-    vault.currentDay(),
-    vault.dailyVolumeUsed(),
-    vault.lastExecution(),
-    vault.cooldownSeconds(),
-    vault.paused(),
-    vault.trustedRouter(),
-  ]);
+  // Sequential calls — X Layer RPC rejects large batches
+  const controllerAuthorized = await vault.authorizedControllers(intent.controller);
+  const nonceUsed = await vault.usedNonces(intent.nonce);
+  const tokenOutAllowed = await vault.allowedTokens(intent.tokenOut);
+  const baseToken = await vault.baseToken();
+  const maxAmountPerTrade = await vault.maxAmountPerTrade();
+  const maxDailyVolume = await vault.maxDailyVolume();
+  const maxSlippageBps = await vault.maxSlippageBps();
+  const currentDay = await vault.currentDay();
+  const dailyVolumeUsed = await vault.dailyVolumeUsed();
+  const lastExecution = await vault.lastExecution();
+  const cooldownSeconds = await vault.cooldownSeconds();
+  const paused = await vault.paused();
+  const trustedRouter = await vault.trustedRouter();
 
   return {
     blockTimestamp: block.timestamp,

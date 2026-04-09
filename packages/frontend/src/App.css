@@ -284,6 +284,24 @@ input:disabled {
   font-family: var(--mono);
   font-size: 14px;
   color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vault-address:hover {
+  color: var(--accent);
+}
+
+.copy-icon {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.copied-badge {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .status-badge {
