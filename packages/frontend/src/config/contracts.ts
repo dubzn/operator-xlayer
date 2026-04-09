@@ -254,6 +254,27 @@ export const OPERATOR_VAULT_ABI = [
   },
   {
     type: "event",
+    name: "TokenAllowed",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "TokenRemoved",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "function",
+    name: "removeAllowedToken",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
     name: "Paused",
     inputs: [],
   },

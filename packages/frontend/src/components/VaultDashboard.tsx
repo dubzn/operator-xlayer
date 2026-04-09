@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { WalletClient, PublicClient, Address } from "viem";
 import type { VaultData } from "../hooks/useVaultData";
 import { OPERATOR_VAULT_ABI, ERC20_ABI, ADDRESSES } from "../config/contracts";
@@ -22,6 +22,13 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+function tokenLabel(addr: string): string {
+  const lower = addr.toLowerCase();
+  if (lower === ADDRESSES.usdt.toLowerCase()) return "USDT";
+  if (lower === ADDRESSES.usdc.toLowerCase()) return "USDC";
+  return shortAddr(addr);
+}
+
 export function VaultDashboard({ vault, data, isOwner, walletClient, publicClient, address, onRefresh }: Props) {
   const [controllerInput, setControllerInput] = useState("");
   const [tokenInput, setTokenInput] = useState("");
@@ -29,6 +36,83 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Track active controllers and tokens from events
+  const [controllers, setControllers] = useState<Address[]>([]);
+  const [allowedTokens, setAllowedTokens] = useState<Address[]>([]);
+
+  const loadLists = useCallback(async () => {
+    try {
+      const [authLogs, revokeLogs, tokenAddLogs, tokenRemoveLogs] = await Promise.all([
+        publicClient.getLogs({
+          address: vault,
+          event: {
+            type: "event",
+            name: "ControllerAuthorized",
+            inputs: [{ name: "controller", type: "address", indexed: true }],
+          },
+          fromBlock: 0n,
+          toBlock: "latest",
+        }),
+        publicClient.getLogs({
+          address: vault,
+          event: {
+            type: "event",
+            name: "ControllerRevoked",
+            inputs: [{ name: "controller", type: "address", indexed: true }],
+          },
+          fromBlock: 0n,
+          toBlock: "latest",
+        }),
+        publicClient.getLogs({
+          address: vault,
+          event: {
+            type: "event",
+            name: "TokenAllowed",
+            inputs: [{ name: "token", type: "address", indexed: true }],
+          },
+          fromBlock: 0n,
+          toBlock: "latest",
+        }),
+        publicClient.getLogs({
+          address: vault,
+          event: {
+            type: "event",
+            name: "TokenRemoved",
+            inputs: [{ name: "token", type: "address", indexed: true }],
+          },
+          fromBlock: 0n,
+          toBlock: "latest",
+        }),
+      ]);
+
+      // Build active controllers set
+      const ctrlSet = new Set<string>();
+      for (const log of authLogs) {
+        ctrlSet.add((log.args.controller as string).toLowerCase());
+      }
+      for (const log of revokeLogs) {
+        ctrlSet.delete((log.args.controller as string).toLowerCase());
+      }
+      setControllers([...ctrlSet] as Address[]);
+
+      // Build active tokens set
+      const tokenSet = new Set<string>();
+      for (const log of tokenAddLogs) {
+        tokenSet.add((log.args.token as string).toLowerCase());
+      }
+      for (const log of tokenRemoveLogs) {
+        tokenSet.delete((log.args.token as string).toLowerCase());
+      }
+      setAllowedTokens([...tokenSet] as Address[]);
+    } catch (err) {
+      console.error("Failed to load controllers/tokens:", err);
+    }
+  }, [publicClient, vault]);
+
+  useEffect(() => {
+    loadLists();
+  }, [loadLists]);
 
   const copyVaultAddress = () => {
     navigator.clipboard.writeText(vault);
@@ -43,6 +127,7 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
       const hash = await fn();
       await publicClient.waitForTransactionReceipt({ hash });
       onRefresh();
+      loadLists();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Transaction failed");
     } finally {
@@ -127,6 +212,101 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
         </div>
       </div>
 
+      {/* Controllers List */}
+      <div className="card">
+        <h3>Authorized Controllers</h3>
+        {controllers.length === 0 ? (
+          <p className="subtitle">No controllers authorized</p>
+        ) : (
+          <div className="list-items">
+            {controllers.map((ctrl) => (
+              <div key={ctrl} className="list-item">
+                <span className="mono">{shortAddr(ctrl)}</span>
+                {isOwner && walletClient && (
+                  <button
+                    className="btn btn-sm btn-danger"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      exec("revoke-ctrl", () => writeVault("revokeController", [ctrl]))
+                    }
+                  >
+                    {busy === "revoke-ctrl" ? "..." : "Revoke"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {isOwner && walletClient && (
+          <div className="action-row" style={{ marginTop: 12 }}>
+            <input
+              type="text"
+              placeholder="0x... controller address"
+              value={controllerInput}
+              onChange={(e) => setControllerInput(e.target.value)}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={busy !== null}
+              onClick={() => {
+                exec("add-ctrl", () => writeVault("authorizeController", [controllerInput]));
+                setControllerInput("");
+              }}
+            >
+              {busy === "add-ctrl" ? "Adding..." : "Add"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Allowed Tokens List */}
+      <div className="card">
+        <h3>Allowed Tokens</h3>
+        {allowedTokens.length === 0 ? (
+          <p className="subtitle">No tokens in allowlist</p>
+        ) : (
+          <div className="list-items">
+            {allowedTokens.map((token) => (
+              <div key={token} className="list-item">
+                <span className="mono">{tokenLabel(token)}</span>
+                <span className="mono subtle">{shortAddr(token)}</span>
+                {isOwner && walletClient && (
+                  <button
+                    className="btn btn-sm btn-danger"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      exec("remove-token", () => writeVault("removeAllowedToken", [token]))
+                    }
+                  >
+                    {busy === "remove-token" ? "..." : "Remove"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {isOwner && walletClient && (
+          <div className="action-row" style={{ marginTop: 12 }}>
+            <input
+              type="text"
+              placeholder="0x... token address"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={busy !== null}
+              onClick={() => {
+                exec("add-token", () => writeVault("addAllowedToken", [tokenInput]));
+                setTokenInput("");
+              }}
+            >
+              {busy === "add-token" ? "Adding..." : "Add"}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Owner actions */}
       {isOwner && walletClient && (
         <>
@@ -148,7 +328,6 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
                   if (!parsed || parsed <= 0) return;
                   const amount = BigInt(Math.round(parsed * 1e6));
                   exec("deposit", async () => {
-                    // Approve first
                     const approveHash = await walletClient.writeContract({
                       address: ADDRESSES.usdt,
                       abi: ERC20_ABI,
@@ -163,51 +342,6 @@ export function VaultDashboard({ vault, data, isOwner, walletClient, publicClien
                 }}
               >
                 {busy === "deposit" ? "Depositing..." : "Deposit"}
-              </button>
-            </div>
-          </div>
-
-          {/* Authorize Controller */}
-          <div className="card">
-            <h3>Authorize Controller</h3>
-            <p className="subtitle">Allow a bot wallet to sign execution intents</p>
-            <div className="action-row">
-              <input
-                type="text"
-                placeholder="0x... controller address"
-                value={controllerInput}
-                onChange={(e) => setControllerInput(e.target.value)}
-              />
-              <button
-                className="btn btn-primary"
-                disabled={busy !== null}
-                onClick={() =>
-                  exec("controller", () => writeVault("authorizeController", [controllerInput]))
-                }
-              >
-                {busy === "controller" ? "Authorizing..." : "Authorize"}
-              </button>
-            </div>
-          </div>
-
-          {/* Add Allowed Token */}
-          <div className="card">
-            <h3>Add Allowed Token</h3>
-            <div className="action-row">
-              <input
-                type="text"
-                placeholder="0x... token address"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-              <button
-                className="btn btn-primary"
-                disabled={busy !== null}
-                onClick={() =>
-                  exec("token", () => writeVault("addAllowedToken", [tokenInput]))
-                }
-              >
-                {busy === "token" ? "Adding..." : "Add Token"}
               </button>
             </div>
           </div>

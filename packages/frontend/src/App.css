@@ -455,3 +455,34 @@ input:disabled {
     flex-direction: column;
   }
 }
+
+/* List items (controllers, tokens) */
+.list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.list-item .mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.list-item .subtle {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.list-item .btn {
+  margin-left: auto;
+}
