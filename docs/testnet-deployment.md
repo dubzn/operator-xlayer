@@ -100,6 +100,24 @@ npx tsx src/index.ts
 # 3. Agent (terminal 2)
 cd packages/agent
 npx tsx src/run.ts
+
+# 4. Frontend (terminal 3)
+cd packages/frontend
+npm install
+npm run dev
+# Abrir http://localhost:5173
 ```
 
-Los .env ya estan configurados para testnet con las addresses deployadas.
+Los .env de backend y agent ya estan configurados para testnet con las addresses V2 deployadas.
+
+## Frontend
+
+El frontend corre en `http://localhost:5173` y permite:
+
+1. Conectar wallet (MetaMask) — auto-configura X Layer Testnet
+2. Ver vaults del usuario (via VaultFactory)
+3. Crear un nuevo vault con policy personalizada
+4. Dashboard del vault: balances, policy, daily volume, last execution
+5. Acciones de owner: deposit, authorize controller, add token, pause/unpause
+
+Se auto-refresca cada 10 segundos para monitorear ejecuciones en tiempo real.

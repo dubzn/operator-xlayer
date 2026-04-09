@@ -2,56 +2,101 @@
 
 > Delegated execution for agents on X Layer without surrendering custody.
 
-**Status:** Phase 1 — vertical slice implementation
+**Status:** MVP functional on X Layer testnet (chain 1952). E2E swap flow verified.
 
-## Prerequisites
+## What is this
 
-- [Foundry](https://book.getfoundry.sh/) — forge v1.4.1 (`forge Version: 1.4.1-v1.4.1`)
-- Solidity 0.8.24
+An infrastructure primitive for delegated DeFi execution on X Layer. A vault owner deposits funds into an onchain vault, configures policy guardrails, and authorizes a controller agent. The controller decides when to act, signs an `ExecutionIntent`, pays the operator's fee via `x402`, and the operator executes only if the vault policy allows it.
 
-## Why this matters
-Agents are good at deciding when to act, but repeated onchain execution creates a bad tradeoff today: either the owner hands over too much wallet power, or the owner has to sign every transaction manually. `X402 Operator` is designed to remove that tradeoff. It lets an owner lock capital inside a policy-constrained vault, authorize a controller agent, and let an operator execute approved actions while charging per request through `x402`.
+## Architecture
 
-## What X402 Operator is
-`X402 Operator` is an infrastructure primitive for delegated DeFi execution on X Layer. A vault owner deposits funds into an onchain vault, configures policy guardrails, and authorizes an operator plus one or more controller agents. A controller agent decides when an action should happen, signs an `ExecutionIntent`, pays the operator's execution fee via `x402`, and the operator executes only if the vault policy allows it. Every paid execution produces a public execution receipt and updates a simple onchain track record.
+```
+┌──────────────┐   signs intent    ┌──────────────┐   submits tx    ┌──────────────┐
+│  Controller   │ ────────────────▶ │   Operator    │ ──────────────▶│    Vault      │
+│  (AI Agent)   │   pays fee (402)  │   (Backend)   │   routeData    │  (Onchain)    │
+└──────────────┘                    └──────────────┘                 └──────────────┘
+                                                                          │
+                                                                          ▼
+                                                                    ┌──────────────┐
+                                                                    │   Registry    │
+                                                                    │  (Receipts)   │
+                                                                    └──────────────┘
+```
 
-This is **not** a trading bot, a marketplace, or a generic paywalled API. It is an execution layer that other agents and protocols can consume.
+- **Vault Owner** — configures rules, deposits capital, authorizes controllers via the frontend
+- **Controller Agent** — signs typed execution intents (EIP-712)
+- **Operator Backend** — charges per request via x402, validates, submits transactions
+- **OperatorVault** — holds funds, enforces 13 onchain policy checks
+- **VaultFactory** — lets users deploy vaults from the frontend, auto-registers in registry
+- **ExecutionRegistry** — stores receipts and track-record counters
+- **MockRouter** — testnet swap simulator (production will use a real DEX)
 
-## Core loop
-1. A vault owner creates or initializes a vault and deposits capital.
-2. The owner defines policy guardrails and authorizes an operator and controller agent.
-3. A controller agent requests an action by signing an `ExecutionIntent` bound to the vault address.
-4. The operator performs free pre-validation, then the controller pays the operator's service fee via `x402`.
-5. The operator validates the payment and the intent, fetches quotes and checks, and calls the vault.
-6. The vault enforces policy constraints onchain and executes only valid operations.
-7. The registry records an execution receipt and updates the operator track record.
+## Packages
 
-## Architecture at a glance
-- **Vault owner** configures rules and owns the capital.
-- **Controller agent** decides when to act and signs typed execution intents.
-- **Operator service** charges per request via `x402`, validates intents, and submits transactions.
-- **Operator vault** holds funds and enforces the owner-defined policy.
-- **Execution registry** stores public receipts and track-record counters.
-- **Onchain OS** provides wallet identity plus trade, market, and security data.
-- **X Layer mainnet** is the execution environment and source of public verifiability.
+| Package | Description |
+|---|---|
+| `packages/contracts` | Solidity contracts (Foundry) — Vault, Factory, Registry, MockRouter |
+| `packages/shared` | TypeScript types and EIP-712 utilities |
+| `packages/backend` | Express server — x402 payment flow, intent validation, execution |
+| `packages/agent` | Demo script — full e2e flow (sign → 402 → pay → execute) |
+| `packages/frontend` | React dashboard — create vaults, configure policy, monitor |
 
-## Current repo purpose
-This repository is the canonical source of truth for the project direction. Phase 1 is intentionally docs-first so the team can begin implementation without reconstructing earlier conversations or revisiting discarded ideas.
+## Quick start
+
+### Prerequisites
+
+- Node.js 20+
+- [Foundry](https://book.getfoundry.sh/) (for contracts)
+- MetaMask (for frontend)
+
+### Build and run
+
+```bash
+# Install and build
+npm install
+npm run build
+
+# Contracts
+cd packages/contracts
+forge build
+
+# Backend (terminal 1)
+cd packages/backend
+npx tsx src/index.ts
+
+# Agent (terminal 2)
+cd packages/agent
+npx tsx src/run.ts
+
+# Frontend (terminal 3)
+cd packages/frontend
+npm install
+npm run dev
+```
+
+The `.env` files for backend and agent are pre-configured for X Layer testnet.
+
+### Testnet info
+
+See [docs/testnet-deployment.md](docs/testnet-deployment.md) for network config, faucet, deployed contract addresses, and e2e test results.
+
+## Core flow
+
+1. Owner creates a vault via the frontend (calls `VaultFactory.createVault()`)
+2. Owner configures policy (max trade, daily volume, slippage, cooldown) and authorizes a controller
+3. Controller agent signs an `ExecutionIntent` (EIP-712) and calls `POST /execute`
+4. Backend returns `402` with fee challenge
+5. Controller pays fee (ERC20 transfer) and re-submits with `paymentReference`
+6. Backend validates payment + intent, gets swap route, calls `vault.executeSwap()`
+7. Vault enforces all 13 policy checks onchain and executes the swap
+8. Registry records receipt and updates operator track record
 
 ## Key documents
+
 - [Project Brief](docs/00-project-brief.md)
-- [Problem and Wedge](docs/01-problem-and-wedge.md)
-- [Competitive Analysis](docs/02-competitive-analysis.md)
 - [System Architecture](docs/03-system-architecture.md)
-- [Actors and Trust Model](docs/04-actors-and-trust-model.md)
 - [Vault Spec](docs/05-vault-spec.md)
 - [Execution Flow](docs/06-execution-flow.md)
 - [x402 Integration](docs/07-x402-integration.md)
-- [Onchain OS Integration](docs/08-onchainos-integration.md)
-- [Contract Plan](docs/09-contract-plan.md)
-- [API and Types](docs/10-api-and-types.md)
-- [Demo Story](docs/11-demo-story.md)
-- [MVP Scope](docs/12-mvp-scope.md)
-- [Build Plan](docs/13-build-plan.md)
-- [Risks and Kill Criteria](docs/14-risks-and-kill-criteria.md)
-- [Open Questions](docs/15-open-questions.md)
+- [Testnet Deployment](docs/testnet-deployment.md)
+- [Handoff](HANDOFF.md) — detailed implementation status and what's next
