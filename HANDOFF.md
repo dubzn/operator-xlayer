@@ -52,6 +52,7 @@
 - `script/DeployTestnet.s.sol` — Deploy V1 con MockRouter (deprecated)
 - `script/DeployTestnetV2.s.sol` — Deploy V2 con Factory + Registry + MockRouter + test vault
 - `script/DeployFactory.s.sol` — Deploy standalone del Factory
+- `script/DeployMainnet.s.sol` — Deploy para mainnet con OKX DEX router (`0xbec6d0E...`) como trustedRouter
 
 **Config:** Foundry con `via_ir = true`, Solidity 0.8.24, `libs = ["lib"]`.
 
@@ -91,6 +92,8 @@ Express server con estos endpoints:
 
 - **GET /receipts/:jobId** — Lee el receipt del registry
 - **GET /operator/track-record** — Lee `successCount` del registry
+- **GET /events/:vaultAddress** — Eventos indexados del vault (del indexer)
+- **POST /indexer/watch** — Registra un vault para monitoreo del indexer
 - **GET /health** — Health check
 
 **Archivos clave:**
@@ -99,10 +102,11 @@ Express server con estos endpoints:
 - `src/middleware/x402.ts` — Challenge 402 + verificación de pago onchain
 - `src/services/intentValidator.ts` — Validación offchain + snapshot de policy
 - `src/services/onchainExecutor.ts` — Arma y envía la tx al vault
-- `src/services/onchainos.ts` — **MockRouter mode** (`USE_MOCK_ROUTER=true`) genera calldata real para el MockRouter. Stub para OnchainOS real cuando no está en mock mode.
+- `src/services/onchainos.ts` — **Dual mode:** MockRouter (`USE_MOCK_ROUTER=true`) para testnet, OKX DEX Aggregator API v6 para mainnet. Auth via HMAC-SHA256 con headers OK-ACCESS-*. Endpoint: `GET /api/v6/dex/aggregator/swap`.
 - `src/services/paymentLedger.ts` — **Persistente en JSON** — guarda payment references consumidos en `payment-ledger.json`
+- `src/services/indexer.ts` — Event poller: arranca desde bloque actual, chunks de 99 bloques, parsea 7 tipos de evento, persiste en `vault-events.json`
 
-Dependencias: `express`, `ethers`, `dotenv`.
+Dependencias: `express`, `ethers`, `cors`, `dotenv`.
 
 Compila con `npm run build -w @x402-operator/backend`.
 
@@ -127,6 +131,7 @@ React + Vite + TypeScript + viem. Single page app.
   - Authorize Controller (bot wallet)
   - Add Allowed Token
   - Pause / Unpause vault
+- **Vault History** — tabla de eventos indexados: swaps (con amountIn/Out y controller), deposits, withdrawals, controller auth/revoke, pause/unpause. Links al explorer. Polling cada 10s via backend indexer.
 - **Auto-refresh** cada 10 segundos
 
 **Stack:** React 19, viem 2.x, Vite 8. Sin wagmi ni framework pesado.
@@ -135,19 +140,26 @@ Dev server: `cd packages/frontend && npm run dev` (puerto 5173).
 
 ---
 
-### Demo Agent — `packages/agent/`
+### Trading Agent — `packages/agent/`
 
-Script `src/run.ts` que ejecuta el flow completo:
-1. Construye `ExecutionIntent`
-2. Firma EIP-712
-3. POST `/execute` → recibe `402`
-4. Paga el fee (transfer ERC20 al operator)
-5. Re-POST `/execute` con `paymentReference`
-6. Imprime resultado
+Bot autónomo (`src/run.ts`) que ejecuta el flow x402 completo en loop:
+1. Construye `ExecutionIntent` con parámetros configurables
+2. `POST /preview` — verifica viabilidad (policy checks, risk flags, quote)
+3. Firma EIP-712
+4. `POST /execute` → recibe `402` challenge
+5. Paga el fee (transfer ERC20 al operator)
+6. Re-POST `/execute` con `paymentReference`
+7. Log resultado, espera `INTERVAL_MS`, repite
+
+**Configuración:**
+- `SWAP_AMOUNT` — monto por ronda
+- `INTERVAL_MS` — intervalo entre rondas (default 30s)
+- `MAX_ROUNDS` — 0 = infinito, 1 = single-shot para demos
+- Graceful shutdown con SIGINT (Ctrl+C), muestra score final
 
 Dependencias: `ethers`, `dotenv`, `@x402-operator/shared`.
 
-Typecheck: `npm run typecheck -w @x402-operator/agent`
+Run: `npm run start -w @x402-operator/agent`
 
 ---
 
@@ -170,40 +182,23 @@ Ver `docs/testnet-deployment.md` para detalles completos de network config, fauc
 
 ## Qué sigue faltando
 
-### Crítico para producción
+### Para demo en mainnet
 
-1. **Wiring OnchainOS Trade API** — `packages/backend/src/services/onchainos.ts`
-   - Hoy en testnet usa MockRouter (`USE_MOCK_ROUTER=true`)
-   - Falta quote real + calldata real compatible con un DEX router en X Layer
-   - Cuando esté listo, setear `USE_MOCK_ROUTER=false` y configurar la API
-
-2. **Deploy a X Layer mainnet (chain 196)**
-   - Cambiar `CHAIN_ID=196` en los .env
-   - Addresses reales de USDT, USDC y un DEX router
-   - OKB para gas
-   - Re-deployar Factory + Registry con el router real
-
-3. **Separar wallets**
-   - Hoy owner/operator/controller son la misma wallet para simplificar testeo
-   - Para producción necesitan ser wallets distintas
+1. **Obtener API keys OKX DEX** — crear proyecto en https://web3.okx.com/build/dev-portal
+2. **Fondear wallet en X Layer mainnet** — OKB para gas + USDT/USDC
+3. **Deploy contratos en mainnet** — `forge script DeployMainnet.s.sol --rpc-url https://rpc.xlayer.tech --broadcast`
+4. **Configurar .env** — `CHAIN_ID=196`, `USE_MOCK_ROUTER=false`, OKX credentials, nuevas addresses
+5. **Verificar token addresses** — confirmar USDT/USDC en explorer mainnet
+6. **Actualizar frontend** — `config/contracts.ts` con addresses y chain ID 196
 
 ### Mejoras pendientes
 
-4. **Binding pago ↔ intent más fuerte**
-   - Hoy el backend verifica que hubo un fee payment válido del controller al operator
-   - Pero ese pago no queda ligado criptográficamente al `intentHash`
-   - Para MVP sirve, pero no es el binding ideal de largo plazo
-
-5. **Receipt más rico si hace falta**
-   - Hoy el registry onchain guarda success receipts compactos
-   - Campos como `executionTxHash` o analytics richer siguen siendo offchain / abiertos
-
-6. **Frontend: historial de ejecuciones**
-   - Mostrar receipts pasados en el dashboard (leer eventos del registry)
-   - Track record del operator
-
-7. **OnchainOS Market/Security**
-   - Opcional para enriquecer preview y warnings
+7. **Separar wallets** — hoy owner/operator/controller son la misma wallet para testeo
+8. **Binding pago ↔ intent más fuerte** — el pago no queda ligado criptográficamente al intentHash
+9. **Deploy frontend** a Vercel/Netlify para acceso público
+10. **Video demo** para presentación del hackathon
+11. **Withdraw desde frontend** — falta UI para retirar fondos del vault
+12. **Filtros en historial** — filtrar por tipo de evento
 
 ---
 
@@ -260,4 +255,7 @@ Hoy el repo tiene **build** y **typecheck**, pero **no tiene ESLint/Biome config
 | VaultFactory | Factory pattern con auto-registro | Usuarios crean vaults desde el frontend sin intervención del operator |
 | Factory → Registry | Factory autorizado puede registrar vaults | Evita que el owner del registry tenga que autorizar cada vault manualmente |
 | MockRouter en testnet | `USE_MOCK_ROUTER=true` | Permite testing e2e sin depender de un DEX real |
+| OKX DEX en mainnet | `USE_MOCK_ROUTER=false` + API v6 | Swaps reales via OKX DEX Aggregator con HMAC-SHA256 auth |
+| Indexer start block | Bloque actual al arrancar | Solo indexa eventos nuevos, no escanea historial |
+| Agent loop | Configurable via INTERVAL_MS + MAX_ROUNDS | Single-shot para demos, loop para operación continua |
 | Frontend stack | React + viem (sin wagmi) | Mínimo, directo, sin abstracciones innecesarias |

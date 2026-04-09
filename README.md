@@ -2,7 +2,7 @@
 
 > Delegated execution for agents on X Layer without surrendering custody.
 
-**Status:** MVP functional on X Layer testnet (chain 1952). E2E swap flow verified.
+**Status:** MVP functional on X Layer testnet (chain 1952). E2E swap flow verified. OKX DEX API integrated for mainnet.
 
 ## What is this
 
@@ -29,7 +29,8 @@ An infrastructure primitive for delegated DeFi execution on X Layer. A vault own
 - **OperatorVault** — holds funds, enforces 13 onchain policy checks
 - **VaultFactory** — lets users deploy vaults from the frontend, auto-registers in registry
 - **ExecutionRegistry** — stores receipts and track-record counters
-- **MockRouter** — testnet swap simulator (production will use a real DEX)
+- **MockRouter** — testnet swap simulator
+- **OKX DEX Aggregator** — production swap routing via OKX DEX API v6
 
 ## Packages
 
@@ -38,8 +39,8 @@ An infrastructure primitive for delegated DeFi execution on X Layer. A vault own
 | `packages/contracts` | Solidity contracts (Foundry) — Vault, Factory, Registry, MockRouter |
 | `packages/shared` | TypeScript types and EIP-712 utilities |
 | `packages/backend` | Express server — x402 payment flow, intent validation, execution |
-| `packages/agent` | Demo script — full e2e flow (sign → 402 → pay → execute) |
-| `packages/frontend` | React dashboard — create vaults, configure policy, monitor |
+| `packages/agent` | Autonomous trading bot — loop with preview, x402 payment, execution |
+| `packages/frontend` | React dashboard — create vaults, configure policy, monitor, history |
 
 ## Quick start
 
@@ -62,11 +63,11 @@ forge build
 
 # Backend (terminal 1)
 cd packages/backend
-npx tsx src/index.ts
+npm run dev
 
-# Agent (terminal 2)
+# Agent (terminal 2) — runs one swap cycle
 cd packages/agent
-npx tsx src/run.ts
+npm start
 
 # Frontend (terminal 3)
 cd packages/frontend
@@ -93,10 +94,6 @@ See [docs/testnet-deployment.md](docs/testnet-deployment.md) for network config,
 
 ## Key documents
 
-- [Project Brief](docs/00-project-brief.md)
-- [System Architecture](docs/03-system-architecture.md)
-- [Vault Spec](docs/05-vault-spec.md)
-- [Execution Flow](docs/06-execution-flow.md)
-- [x402 Integration](docs/07-x402-integration.md)
-- [Testnet Deployment](docs/testnet-deployment.md)
+- [Architecture & Flow](docs/architecture.md) — complete system architecture, x402 protocol, security model
+- [Testnet Deployment](docs/testnet-deployment.md) — network config, faucet, deployed addresses
 - [Handoff](HANDOFF.md) — detailed implementation status and what's next

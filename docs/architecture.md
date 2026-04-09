@@ -171,12 +171,12 @@ Reads a full policy snapshot from the vault in one batch (13 parallel calls):
 
 Then evaluates the same 8 checks the contract would enforce. This is a gas-saving filter — if any check fails, the backend rejects the request without sending a transaction.
 
-### Service: OnchainOS / Quote Provider
+### Service: OKX DEX / Quote Provider
 
 Responsible for generating `routeData` (the calldata the vault forwards to the router).
 
 - **Testnet mode** (`USE_MOCK_ROUTER=true`): Encodes `MockRouter.swap(tokenIn, tokenOut, amountIn, amountOut)` calldata with a 1% spread.
-- **Production mode**: Calls the OnchainOS Trade API to get a real DEX route with optimal pricing (TODO).
+- **Production mode** (`USE_MOCK_ROUTER=false`): Calls the OKX DEX Aggregator API v6 (`GET /api/v6/dex/aggregator/swap`) with HMAC-SHA256 authentication. Returns real swap calldata and router address for X Layer mainnet. Requires `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, and `OKX_PROJECT_ID` environment variables.
 
 ### Service: On-chain Executor
 
@@ -195,12 +195,30 @@ A persistent `Set<string>` backed by `payment-ledger.json`. Each payment referen
 
 Polls the chain every 5 seconds for vault events:
 
+- Starts from the current block on first run (only indexes new events going forward)
 - Respects X Layer's 100-block `getLogs` limit by chunking requests
 - Parses 7 event types: `ExecutionSucceeded`, `Deposit`, `Withdraw`, `ControllerAuthorized`, `ControllerRevoked`, `Paused`, `Unpaused`
 - Fetches block timestamps for each event
 - Deduplicates by `txHash + eventType`
 - Persists to `vault-events.json` with `lastBlock` cursor for restart resilience
 - Serves events via `GET /events/:vaultAddress`
+
+## Trading Agent
+
+The autonomous trading bot (`packages/agent/src/run.ts`) executes the full x402 flow in a configurable loop:
+
+1. Build an `ExecutionIntent` with the configured swap parameters
+2. Call `POST /preview` to check viability (policy checks, quote availability, risk flags)
+3. Sign the intent with EIP-712
+4. Call `POST /execute` without payment — receive the 402 challenge
+5. Pay the operator fee via ERC-20 transfer on-chain
+6. Re-call `POST /execute` with the `paymentReference` (fee tx hash)
+7. Log the result and wait for the next interval
+
+Configuration via environment variables:
+- `SWAP_AMOUNT` — amount per round
+- `INTERVAL_MS` — milliseconds between rounds (default 30s)
+- `MAX_ROUNDS` — 0 for unlimited, 1 for single-shot
 
 ## Frontend
 
@@ -268,3 +286,29 @@ Bot                      Operator Backend                Vault Contract         
 | Test Vault | `0x6C50552803c7f2E26ff3452cB768FA4A8d7969Cb` |
 | USDT | `0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c` |
 | USDC | `0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D` |
+
+## Mainnet Deployment (X Layer — chain 196)
+
+For production, the system uses the OKX DEX Aggregator router instead of MockRouter.
+
+| Component | Address |
+|-----------|---------|
+| OKX DEX Router | `0xbec6d0E341102732e4FD62EC50E2F0a9D1bd1D33` |
+| OKX Token Approval | `0x8b773D83bc66Be128c60e07E17C8901f7a64F000` |
+
+Deploy with:
+```bash
+cd packages/contracts
+forge script script/DeployMainnet.s.sol --rpc-url https://rpc.xlayer.tech --broadcast --private-key $PRIVATE_KEY
+```
+
+Backend configuration for mainnet:
+```
+CHAIN_ID=196
+RPC_URL=https://rpc.xlayer.tech
+USE_MOCK_ROUTER=false
+OKX_API_KEY=<your key>
+OKX_SECRET_KEY=<your secret>
+OKX_PASSPHRASE=<your passphrase>
+OKX_PROJECT_ID=<your project id>
+```
