@@ -1,13 +1,13 @@
-export const CHAIN_ID = 1952;
+export const CHAIN_ID = 196;
 
-export const RPC_URL = "https://testrpc.xlayer.tech/terigon";
+export const RPC_URL = "https://rpc.xlayer.tech";
 
 export const ADDRESSES = {
-  factory: "0xdA3f23F937d530120F1DeAcBDA08770b1CF99CA7" as `0x${string}`,
-  registry: "0x3d77c98D4E0f150Fd28D3A12708fd0300076ce97" as `0x${string}`,
-  router: "0x54Bf470359EaE4A9BEe20F587Df9dc20C333e25F" as `0x${string}`,
-  usdt: "0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c" as `0x${string}`,
-  usdc: "0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D" as `0x${string}`,
+  factory: "0x22188933120f63Ea6EAd700fFc967bdB0db88A79" as `0x${string}`,
+  registry: "0x652cc79a37Ef6c9CD76179c6238A6C4CC3018493" as `0x${string}`,
+  router: "0xbec6d0E341102732e4FD62EC50E2F0a9D1bd1D33" as `0x${string}`,
+  usdt: "0x1E4a5963aBFD975d8c9021ce480b42188849D41d" as `0x${string}`,
+  usdc: "0x74b7F16337b8972027F6196A17a631aC6dE26d22" as `0x${string}`,
 } as const;
 
 export const VAULT_FACTORY_ABI = [

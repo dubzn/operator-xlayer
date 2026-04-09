@@ -10,9 +10,9 @@ import {
 } from "viem";
 import { CHAIN_ID, RPC_URL } from "../config/contracts";
 
-const xlayerTestnet = {
+const xlayer = {
   id: CHAIN_ID,
-  name: "X Layer Testnet",
+  name: "X Layer",
   nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
   rpcUrls: {
     default: { http: [RPC_URL] },
@@ -20,7 +20,7 @@ const xlayerTestnet = {
   blockExplorers: {
     default: {
       name: "OKX Explorer",
-      url: "https://web3.okx.com/explorer/x-layer-testnet",
+      url: "https://www.okx.com/explorer/xlayer",
     },
   },
 } as const;
@@ -29,7 +29,7 @@ export function useWallet() {
   const [address, setAddress] = useState<Address | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [publicClient] = useState<PublicClient>(
-    createPublicClient({ chain: xlayerTestnet, transport: http(RPC_URL) })
+    createPublicClient({ chain: xlayer, transport: http(RPC_URL) })
   );
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,11 +60,11 @@ export function useWallet() {
             params: [
               {
                 chainId: `0x${CHAIN_ID.toString(16)}`,
-                chainName: "X Layer Testnet",
+                chainName: "X Layer",
                 nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
                 rpcUrls: [RPC_URL],
                 blockExplorerUrls: [
-                  "https://web3.okx.com/explorer/x-layer-testnet",
+                  "https://www.okx.com/explorer/xlayer",
                 ],
               },
             ],
@@ -73,7 +73,7 @@ export function useWallet() {
       }
 
       const client = createWalletClient({
-        chain: xlayerTestnet,
+        chain: xlayer,
         transport: custom(window.ethereum),
         account: accounts[0] as Address,
       });

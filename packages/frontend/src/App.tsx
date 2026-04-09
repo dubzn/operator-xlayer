@@ -28,7 +28,7 @@ function App() {
       <header>
         <div className="header-left">
           <h1>X402 Operator</h1>
-          <span className="network-badge">X Layer Testnet</span>
+          <span className="network-badge">X Layer</span>
         </div>
         <ConnectWallet
           address={address}

@@ -33,7 +33,7 @@ function formatTime(ts: number): string {
 }
 
 function EventRow({ event }: { event: IndexedEvent }) {
-  const explorerBase = "https://web3.okx.com/explorer/x-layer-testnet/tx/";
+  const explorerBase = "https://www.okx.com/explorer/xlayer/tx/";
   const d = event.data;
 
   switch (event.type) {

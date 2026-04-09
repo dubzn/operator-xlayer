@@ -10,9 +10,9 @@ contract DeployMainnet is Script {
     function run() external {
         address deployer = vm.addr(vm.envUint("PRIVATE_KEY"));
 
-        // X Layer mainnet tokens
-        address usdt = 0x1E4a5963aBFD975d8c9021ce480b42188849D41d;  // USDC on X Layer mainnet
-        // Note: verify token addresses on the X Layer explorer before deploying
+        // X Layer mainnet tokens (verified)
+        address usdt = 0x1E4a5963aBFD975d8c9021ce480b42188849D41d;
+        address usdc = 0x74b7F16337b8972027F6196A17a631aC6dE26d22;
 
         // OKX DEX router on X Layer mainnet
         address okxDexRouter = 0xbec6d0E341102732e4FD62EC50E2F0a9D1bd1D33;
@@ -45,10 +45,15 @@ contract DeployMainnet is Script {
         );
         console.log("Vault (via factory):", vault);
 
+        // 5. Configure vault — allow USDC as output token
+        OperatorVault(vault).addAllowedToken(usdc);
+        OperatorVault(vault).authorizeController(deployer);
+
         console.log("--- Deployment Summary ---");
         console.log("Deployer/Operator:", deployer);
         console.log("OKX DEX Router:", okxDexRouter);
-        console.log("BaseToken:", usdt);
+        console.log("USDT:", usdt);
+        console.log("USDC:", usdc);
 
         vm.stopBroadcast();
     }
