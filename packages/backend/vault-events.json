@@ -1,0 +1,26 @@
+{
+  "lastBlock": 27286509,
+  "events": [
+    {
+      "vault": "0x6c50552803c7f2e26ff3452cb768fa4a8d7969cb",
+      "type": "Deposit",
+      "blockNumber": 27284872,
+      "txHash": "0x80bfbda8c7770ecdce31c087f9d0c5bf626e9daaf2084ebf6f1ca932bfdcdc51",
+      "timestamp": 1775743709,
+      "data": {
+        "token": "0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c",
+        "amount": "1000000"
+      }
+    },
+    {
+      "vault": "0x6c50552803c7f2e26ff3452cb768fa4a8d7969cb",
+      "type": "ControllerAuthorized",
+      "blockNumber": 27284883,
+      "txHash": "0x3cab4af3c5dab8d516fd51f296d32d9d071e4e8e7a7ebe02a14bbd48b43540ea",
+      "timestamp": 1775743720,
+      "data": {
+        "controller": "0xF88A50ef4CfCAa82021D6b362530bc0887cB570b"
+      }
+    }
+  ]
+}

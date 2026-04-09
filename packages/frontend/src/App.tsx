@@ -2,10 +2,12 @@ import { useState } from "react";
 import type { Address } from "viem";
 import { useWallet } from "./hooks/useWallet";
 import { useVaultData } from "./hooks/useVaultData";
+import { useVaultHistory } from "./hooks/useVaultHistory";
 import { ConnectWallet } from "./components/ConnectWallet";
 import { VaultSelector } from "./components/VaultSelector";
 import { CreateVault } from "./components/CreateVault";
 import { VaultDashboard } from "./components/VaultDashboard";
+import { VaultHistory } from "./components/VaultHistory";
 import "./App.css";
 
 function App() {
@@ -14,6 +16,7 @@ function App() {
   const [selectedVault, setSelectedVault] = useState<Address | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const { data: vaultData, loading, refresh } = useVaultData(publicClient, selectedVault);
+  const { events: vaultEvents, loading: historyLoading } = useVaultHistory(selectedVault);
 
   const isOwner =
     vaultData && address
@@ -91,15 +94,18 @@ function App() {
             )}
 
             {selectedVault && vaultData && (
-              <VaultDashboard
-                vault={selectedVault}
-                data={vaultData}
-                isOwner={isOwner}
-                walletClient={walletClient}
-                publicClient={publicClient}
-                address={address}
-                onRefresh={refresh}
-              />
+              <>
+                <VaultDashboard
+                  vault={selectedVault}
+                  data={vaultData}
+                  isOwner={isOwner}
+                  walletClient={walletClient}
+                  publicClient={publicClient}
+                  address={address}
+                  onRefresh={refresh}
+                />
+                <VaultHistory events={vaultEvents} loading={historyLoading} />
+              </>
             )}
           </>
         )}

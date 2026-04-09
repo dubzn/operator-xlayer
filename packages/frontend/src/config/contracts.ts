@@ -209,6 +209,59 @@ export const OPERATOR_VAULT_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  {
+    type: "event",
+    name: "ExecutionSucceeded",
+    inputs: [
+      { name: "jobId", type: "bytes32", indexed: true },
+      { name: "controller", type: "address", indexed: true },
+      { name: "tokenIn", type: "address", indexed: false },
+      { name: "tokenOut", type: "address", indexed: false },
+      { name: "amountIn", type: "uint256", indexed: false },
+      { name: "amountOut", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Deposit",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Withdraw",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "to", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "ControllerAuthorized",
+    inputs: [
+      { name: "controller", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "ControllerRevoked",
+    inputs: [
+      { name: "controller", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "Paused",
+    inputs: [],
+  },
+  {
+    type: "event",
+    name: "Unpaused",
+    inputs: [],
+  },
 ] as const;
 
 export const ERC20_ABI = [
