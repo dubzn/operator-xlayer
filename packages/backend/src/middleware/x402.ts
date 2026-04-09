@@ -78,5 +78,5 @@ export async function verifyPayment(
 }
 
 export function isZeroAddress(address: string): boolean {
-  return address.toLowerCase() === ZERO_ADDRESS;
+  return !address || address.toLowerCase() === ZERO_ADDRESS;
 }

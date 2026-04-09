@@ -4,7 +4,7 @@ import type { ExecutionIntent } from "./types.js";
 export const EIP712_DOMAIN = {
   name: "X402Operator",
   version: "1",
-  chainId: 196,
+  chainId: parseInt(process.env.CHAIN_ID || "196"),
 };
 
 export const EXECUTION_INTENT_TYPES = {

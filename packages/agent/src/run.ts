@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { ethers } from "ethers";
 import { signIntent } from "@x402-operator/shared";
 import type { ExecutionIntent, ExecuteRequest, PaymentChallenge } from "@x402-operator/shared";

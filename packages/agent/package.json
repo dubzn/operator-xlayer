@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@x402-operator/shared": "0.1.0",
+    "dotenv": "^17.4.1",
     "ethers": "^6.13.0"
   },
   "devDependencies": {

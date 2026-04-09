@@ -1,14 +1,48 @@
 /**
- * OnchainOS Trade API client — Phase 1 stub.
+ * OnchainOS Trade API client.
  *
- * In Phase 1 this builds routeData for a direct DEX router call.
+ * In testnet mode (USE_MOCK_ROUTER=true), builds routeData for MockRouter.
  * When OnchainOS Trade API is available, swap the implementation here.
  */
+
+import { ethers } from "ethers";
 
 export interface TradeQuote {
   routeData: string;       // encoded calldata for the DEX router
   expectedOut: string;     // expected output amount
   routerAddress: string;   // target router (must match vault's trustedRouter)
+}
+
+const MOCK_ROUTER_ABI = [
+  "function swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut)",
+];
+
+/**
+ * For testnet with MockRouter: builds calldata that swaps tokenIn for tokenOut
+ * at a ~1:1 rate (stablecoin-to-stablecoin).
+ */
+function getMockRouteData(
+  tokenIn: string,
+  tokenOut: string,
+  amountIn: string
+): TradeQuote {
+  // ~1:1 for stablecoin pairs, minus a small "spread" for realism
+  const amountInBn = BigInt(amountIn);
+  const expectedOut = amountInBn * 99n / 100n; // 1% spread
+
+  const iface = new ethers.Interface(MOCK_ROUTER_ABI);
+  const routeData = iface.encodeFunctionData("swap", [
+    tokenIn,
+    tokenOut,
+    amountInBn,
+    expectedOut,
+  ]);
+
+  return {
+    routeData,
+    expectedOut: expectedOut.toString(),
+    routerAddress: "", // will be checked against vault.trustedRouter
+  };
 }
 
 export async function getSwapQuote(
@@ -17,20 +51,18 @@ export async function getSwapQuote(
   amountIn: string,
   recipient: string
 ): Promise<TradeQuote> {
+  const useMock = process.env.USE_MOCK_ROUTER === "true";
+
+  if (useMock) {
+    console.log("[onchainos] Using MockRouter for testnet swap");
+    return getMockRouteData(tokenIn, tokenOut, amountIn);
+  }
+
   // TODO: Replace with OnchainOS Trade API call
-  // For now, this is a placeholder that returns empty route data.
-  // In integration testing, we'll use a real DEX or mock.
-
-  console.log("[onchainos] getSwapQuote called — using stub");
-  console.log(`  tokenIn: ${tokenIn}`);
-  console.log(`  tokenOut: ${tokenOut}`);
-  console.log(`  amountIn: ${amountIn}`);
-
-  // This stub will be replaced with actual OnchainOS Trade API:
   // const response = await fetch("https://onchainos.okx.com/trade/swap", {
   //   method: "POST",
   //   headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-  //   body: JSON.stringify({ chainId: 196, tokenIn, tokenOut, amount: amountIn, recipient })
+  //   body: JSON.stringify({ chainId, tokenIn, tokenOut, amount: amountIn, recipient })
   // });
   // const data = await response.json();
   // return { routeData: data.calldata, expectedOut: data.expectedOutput, routerAddress: data.router };

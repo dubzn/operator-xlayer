@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { ethers } from "ethers";
 
 function env(key: string): string {
@@ -8,7 +9,7 @@ function env(key: string): string {
 
 export const config = {
   port: parseInt(process.env.PORT || "3000"),
-  chainId: 196,
+  chainId: parseInt(process.env.CHAIN_ID || "196"),
   rpcUrl: env("RPC_URL"),
   operatorPrivateKey: env("OPERATOR_PRIVATE_KEY"),
   vaultAddress: env("VAULT_ADDRESS"),
