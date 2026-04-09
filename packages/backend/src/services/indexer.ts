@@ -75,9 +75,12 @@ async function pollEvents(): Promise<void> {
   try {
     const currentBlock = await provider.getBlockNumber();
 
-    // On first run, start from 10 blocks back
+    // On first run, start from current block (only index new events going forward)
     if (s.lastBlock === 0) {
-      s.lastBlock = Math.max(0, currentBlock - 10);
+      s.lastBlock = currentBlock;
+      save();
+      console.log(`[indexer] Initialized at block ${currentBlock}`);
+      return;
     }
 
     // Nothing new

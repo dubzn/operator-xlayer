@@ -1,100 +1,224 @@
 import "dotenv/config";
 import { ethers } from "ethers";
 import { signIntent } from "@x402-operator/shared";
-import type { ExecutionIntent, ExecuteRequest, PaymentChallenge } from "@x402-operator/shared";
+import type {
+  ExecutionIntent,
+  ExecuteRequest,
+  ExecutionPreview,
+  PaymentChallenge,
+} from "@x402-operator/shared";
 
-// --- Config from env ---
+// --- Config ---
 const OPERATOR_URL = process.env.OPERATOR_URL || "http://localhost:3000";
 const CONTROLLER_PRIVATE_KEY = process.env.CONTROLLER_PRIVATE_KEY!;
 const VAULT_ADDRESS = process.env.VAULT_ADDRESS!;
-const TOKEN_IN = process.env.TOKEN_IN!;   // e.g. USDT address
-const TOKEN_OUT = process.env.TOKEN_OUT!;  // e.g. WETH address
-const SWAP_AMOUNT = process.env.SWAP_AMOUNT || "100000000"; // 100 USDT (6 decimals)
+const TOKEN_IN = process.env.TOKEN_IN!;
+const TOKEN_OUT = process.env.TOKEN_OUT!;
 const FEE_TOKEN = process.env.FEE_TOKEN!;
 const RPC_URL = process.env.RPC_URL!;
+const SWAP_AMOUNT = process.env.SWAP_AMOUNT || "1000000";
+const INTERVAL_MS = parseInt(process.env.INTERVAL_MS || "30000");
+const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS || "0"); // 0 = infinite
 
-async function main() {
-  console.log("=== X402 Operator Demo Agent ===\n");
+// --- Helpers ---
+function log(msg: string) {
+  const ts = new Date().toISOString().slice(11, 19);
+  console.log(`[${ts}] ${msg}`);
+}
 
-  // Setup
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const controllerWallet = new ethers.Wallet(CONTROLLER_PRIVATE_KEY, provider);
-  const controllerAddress = controllerWallet.address;
+function formatAmount(raw: string, decimals = 6): string {
+  return (Number(raw) / 10 ** decimals).toFixed(decimals > 6 ? 8 : 2);
+}
 
-  console.log(`Controller: ${controllerAddress}`);
-  console.log(`Vault: ${VAULT_ADDRESS}`);
-  console.log(`Swap: ${SWAP_AMOUNT} ${TOKEN_IN} → ${TOKEN_OUT}\n`);
+async function apiCall<T>(
+  path: string,
+  method: "GET" | "POST",
+  body?: unknown
+): Promise<{ status: number; data: T }> {
+  const res = await fetch(`${OPERATOR_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await res.json();
+  return { status: res.status, data };
+}
 
-  // 1. Build ExecutionIntent
+// --- Core flow ---
+async function executeSwapCycle(
+  wallet: ethers.Wallet,
+  nonce: number
+): Promise<boolean> {
+  const controller = wallet.address;
+
+  // 1. Build intent
   const intent: ExecutionIntent = {
     vaultAddress: VAULT_ADDRESS,
-    controller: controllerAddress,
+    controller,
     tokenIn: TOKEN_IN,
     tokenOut: TOKEN_OUT,
     amount: SWAP_AMOUNT,
-    maxSlippageBps: 200,
-    nonce: Date.now(),
-    deadline: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+    maxSlippageBps: 500,
+    nonce,
+    deadline: Math.floor(Date.now() / 1000) + 300,
   };
 
-  console.log("1. Built ExecutionIntent:", JSON.stringify(intent, null, 2));
+  log(`Intent: swap ${formatAmount(SWAP_AMOUNT)} ${TOKEN_IN.slice(0, 8)}... → ${TOKEN_OUT.slice(0, 8)}...`);
 
-  // 2. Sign EIP-712
-  const signature = await signIntent(controllerWallet, intent);
-  console.log(`\n2. Signed intent: ${signature.slice(0, 20)}...`);
+  // 2. Preview — check if the swap is viable
+  const preview = await apiCall<ExecutionPreview>("/preview", "POST", { intent });
 
-  // 3. POST /execute — expect 402
-  console.log("\n3. Calling POST /execute (expecting 402)...");
-  const firstRequest: Partial<ExecuteRequest> = { intent, signature };
-
-  const firstResponse = await fetch(`${OPERATOR_URL}/execute`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(firstRequest),
-  });
-
-  if (firstResponse.status !== 402) {
-    console.error(`Unexpected status: ${firstResponse.status}`);
-    console.error(await firstResponse.text());
-    process.exit(1);
+  if (preview.status !== 200) {
+    log(`Preview failed (${preview.status}): ${JSON.stringify(preview.data)}`);
+    return false;
   }
 
-  const challenge: PaymentChallenge = await firstResponse.json();
-  console.log("   Got 402 challenge:", challenge);
-
-  // 4. Pay the fee
-  console.log("\n4. Paying operator fee...");
-  const feeToken = new ethers.Contract(
-    challenge.token,
-    ["function transfer(address to, uint256 amount) returns (bool)"],
-    controllerWallet
+  const p = preview.data;
+  const blockers = p.riskFlags.filter(
+    (f) => !f.includes("route-not-ready") && !f.includes("quote-missing")
   );
 
-  const payTx = await feeToken.transfer(challenge.paymentAddress, challenge.fee);
+  if (blockers.length > 0) {
+    log(`Preview blockers: ${blockers.join(", ")}`);
+    for (const w of p.warnings) log(`  ⚠ ${w}`);
+    return false;
+  }
+
+  if (!p.quotedRoute.hasRouteData) {
+    log("No route data available — skipping");
+    return false;
+  }
+
+  log(`Preview OK — expected out: ${formatAmount(p.quotedRoute.expectedOut)}, fee: ${formatAmount(p.estimatedFee.amount)}`);
+
+  // 3. Sign EIP-712 intent
+  const signature = await signIntent(wallet, intent);
+  log(`Signed intent (nonce=${nonce})`);
+
+  // 4. First execute call — expect 402
+  const firstCall = await apiCall<PaymentChallenge>("/execute", "POST", {
+    intent,
+    signature,
+  } as Partial<ExecuteRequest>);
+
+  if (firstCall.status === 400) {
+    log(`Validation rejected: ${JSON.stringify(firstCall.data)}`);
+    return false;
+  }
+
+  if (firstCall.status !== 402) {
+    log(`Unexpected status ${firstCall.status}: ${JSON.stringify(firstCall.data)}`);
+    return false;
+  }
+
+  const challenge = firstCall.data;
+  log(`Got 402 — fee: ${formatAmount(challenge.fee)} to ${challenge.paymentAddress.slice(0, 10)}...`);
+
+  // 5. Pay the fee
+  const feeContract = new ethers.Contract(
+    challenge.token,
+    ["function transfer(address to, uint256 amount) returns (bool)"],
+    wallet
+  );
+
+  log("Paying operator fee...");
+  const payTx = await feeContract.transfer(challenge.paymentAddress, challenge.fee);
   const payReceipt = await payTx.wait();
   const paymentReference = payReceipt.hash;
-  console.log(`   Payment tx: ${paymentReference}`);
+  log(`Fee paid: ${paymentReference}`);
 
-  // 5. Re-POST /execute with paymentReference
-  console.log("\n5. Re-calling POST /execute with payment proof...");
-  const secondRequest: ExecuteRequest = { intent, signature, paymentReference };
+  // 6. Execute with payment proof
+  log("Executing swap...");
+  const execCall = await apiCall<{ status: string; jobId: string; txHash: string }>(
+    "/execute",
+    "POST",
+    { intent, signature, paymentReference } as ExecuteRequest
+  );
 
-  const secondResponse = await fetch(`${OPERATOR_URL}/execute`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(secondRequest),
-  });
-
-  const result = await secondResponse.json();
-
-  if (secondResponse.ok) {
-    console.log("\n=== Execution Successful ===");
-    console.log(`   JobId: ${result.jobId}`);
-    console.log(`   TxHash: ${result.txHash}`);
-  } else {
-    console.error("\n=== Execution Failed ===");
-    console.error(result);
+  if (execCall.status !== 200) {
+    log(`Execution failed (${execCall.status}): ${JSON.stringify(execCall.data)}`);
+    return false;
   }
+
+  log(`SUCCESS — jobId: ${execCall.data.jobId}`);
+  log(`  txHash: ${execCall.data.txHash}`);
+
+  return true;
 }
 
-main().catch(console.error);
+// --- Main loop ---
+async function main() {
+  console.log("\n========================================");
+  console.log("  X402 Operator — Trading Agent");
+  console.log("========================================\n");
+
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const wallet = new ethers.Wallet(CONTROLLER_PRIVATE_KEY, provider);
+
+  log(`Controller: ${wallet.address}`);
+  log(`Vault:      ${VAULT_ADDRESS}`);
+  log(`Swap:       ${formatAmount(SWAP_AMOUNT)} per round`);
+  log(`Interval:   ${INTERVAL_MS / 1000}s`);
+  log(`Max rounds: ${MAX_ROUNDS || "unlimited"}\n`);
+
+  // Check balances
+  const feeContract = new ethers.Contract(
+    FEE_TOKEN,
+    ["function balanceOf(address) view returns (uint256)"],
+    provider
+  );
+  const balance = await feeContract.balanceOf(wallet.address);
+  log(`Fee token balance: ${formatAmount(balance.toString())}\n`);
+
+  let round = 0;
+  let successes = 0;
+  let failures = 0;
+
+  const runRound = async () => {
+    round++;
+    const nonce = Date.now();
+    log(`--- Round ${round} ---`);
+
+    try {
+      const ok = await executeSwapCycle(wallet, nonce);
+      if (ok) successes++;
+      else failures++;
+    } catch (err) {
+      failures++;
+      log(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    log(`Score: ${successes} success / ${failures} failed\n`);
+  };
+
+  // Single-shot mode
+  if (MAX_ROUNDS === 1) {
+    await runRound();
+    return;
+  }
+
+  // Loop mode
+  await runRound();
+
+  const interval = setInterval(async () => {
+    if (MAX_ROUNDS > 0 && round >= MAX_ROUNDS) {
+      log("Max rounds reached. Stopping.");
+      clearInterval(interval);
+      return;
+    }
+    await runRound();
+  }, INTERVAL_MS);
+
+  // Graceful shutdown
+  process.on("SIGINT", () => {
+    log("\nShutting down...");
+    clearInterval(interval);
+    log(`Final score: ${successes} success / ${failures} failed in ${round} rounds`);
+    process.exit(0);
+  });
+}
+
+main().catch((err) => {
+  console.error("Fatal:", err);
+  process.exit(1);
+});
