@@ -18,4 +18,5 @@ interface IExecutionRegistry {
 
     function recordReceipt(Receipt calldata receipt) external;
     function getReceipt(bytes32 jobId) external view returns (Receipt memory);
+    function authorizeVault(address vault) external;
 }

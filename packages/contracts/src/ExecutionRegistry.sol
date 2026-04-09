@@ -8,12 +8,16 @@ contract ExecutionRegistry is IExecutionRegistry {
     mapping(bytes32 => Receipt) private _receipts;
     mapping(address => bool) public authorizedVaults;
     mapping(address => uint256) public successCount;
+    mapping(address => bool) public authorizedFactories;
 
     event ReceiptRecorded(bytes32 indexed jobId, address indexed vault, address indexed operator);
     event VaultAuthorized(address indexed vault);
     event VaultRevoked(address indexed vault);
+    event FactoryAuthorized(address indexed factory);
+    event FactoryRevoked(address indexed factory);
 
     error OnlyOwner();
+    error OnlyOwnerOrFactory();
     error ReceiptAlreadyExists(bytes32 jobId);
     error UnauthorizedRecorder(address recorder);
 
@@ -26,7 +30,18 @@ contract ExecutionRegistry is IExecutionRegistry {
         owner = msg.sender;
     }
 
-    function authorizeVault(address vault) external onlyOwner {
+    function authorizeFactory(address factory) external onlyOwner {
+        authorizedFactories[factory] = true;
+        emit FactoryAuthorized(factory);
+    }
+
+    function revokeFactory(address factory) external onlyOwner {
+        authorizedFactories[factory] = false;
+        emit FactoryRevoked(factory);
+    }
+
+    function authorizeVault(address vault) external {
+        if (msg.sender != owner && !authorizedFactories[msg.sender]) revert OnlyOwnerOrFactory();
         authorizedVaults[vault] = true;
         emit VaultAuthorized(vault);
     }

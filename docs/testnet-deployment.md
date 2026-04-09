@@ -28,17 +28,20 @@ Los tokens de testnet no tienen valor real.
 | USD₮0 (USDT) | `0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c` | 6 |
 | USDC_TEST | `0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D` | 6 |
 
-## Contratos deployados
+## Contratos deployados (V2)
 
 Fecha: 2026-04-08
 
 | Contrato | Address |
 |---|---|
-| MockRouter | `0x652cc79a37Ef6c9CD76179c6238A6C4CC3018493` |
-| ExecutionRegistry | `0x22188933120f63Ea6EAd700fFc967bdB0db88A79` |
-| OperatorVault | `0xCc0218eD6DA134A85543F18bf0c93C8950eaE7C6` |
+| MockRouter | `0x54Bf470359EaE4A9BEe20F587Df9dc20C333e25F` |
+| ExecutionRegistry | `0x3d77c98D4E0f150Fd28D3A12708fd0300076ce97` |
+| VaultFactory | `0xdA3f23F937d530120F1DeAcBDA08770b1CF99CA7` |
+| TestVault (via factory) | `0x6C50552803c7f2E26ff3452cB768FA4A8d7969Cb` |
 
-## Config del Vault
+V1 (deprecated): MockRouter `0x652c...8493`, Registry `0x2218...3A79`, Vault `0xCc02...e7C6`
+
+## Config del TestVault
 
 | Param | Valor |
 |---|---|
@@ -47,7 +50,7 @@ Fecha: 2026-04-08
 | Controller | `0xF88A50ef4CfCAa82021D6b362530bc0887cB570b` |
 | BaseToken | USDT (`0x9e29...FB0c`) |
 | AllowedOut | USDC (`0xcB8B...c79D`) |
-| TrustedRouter | MockRouter (`0x652c...8493`) |
+| TrustedRouter | MockRouter (`0x54Bf...e25F`) |
 | Max per trade | 5 USDT (5000000) |
 | Max daily volume | 10 USDT (10000000) |
 | Max slippage | 5% (500 bps) |
@@ -55,10 +58,17 @@ Fecha: 2026-04-08
 
 La misma wallet actua como owner, operator y controller para simplificar el testeo.
 
+## VaultFactory
+
+El factory permite a cualquier usuario crear su propio vault desde el frontend:
+- `createVault(baseToken, maxPerTrade, maxDailyVolume, maxSlippageBps, cooldown)`
+- Auto-registra el vault en el ExecutionRegistry
+- El caller queda como owner del vault
+
 ## Broadcast
 
 Las transacciones del deploy quedan en:
-`packages/contracts/broadcast/DeployTestnet.s.sol/1952/run-latest.json`
+`packages/contracts/broadcast/DeployTestnetV2.s.sol/1952/run-latest.json`
 
 ## Test end-to-end exitoso
 
