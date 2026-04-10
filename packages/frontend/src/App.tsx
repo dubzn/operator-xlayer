@@ -251,8 +251,8 @@ function App() {
                   <p className="eyebrow">Vault workspace</p>
                   <h2 className="display-text">Select a vault to open the cockpit</h2>
                   <p className="muted-copy">
-                    Choose one of your deployed vaults, load a known vault address manually,
-                    or create a new one from the control strip above.
+                    Choose one of your deployed vaults or create a new one from the control
+                    strip above.
                   </p>
                 </section>
               )}

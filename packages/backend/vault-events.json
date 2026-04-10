@@ -1,5 +1,5 @@
 {
-  "lastBlock": 27570318,
+  "lastBlock": 27584118,
   "events": [
     {
       "vault": "0x6c50552803c7f2e26ff3452cb768fa4a8d7969cb",
@@ -427,6 +427,17 @@
       "data": {
         "token": "0xd30D8CA2E7715eE6804a287eB86FAfC0839b1380",
         "amount": "16369109000000000"
+      }
+    },
+    {
+      "vault": "0x965964815170389dd5cb9ba2c05d43b72e34adcd",
+      "type": "Deposit",
+      "blockNumber": 27580491,
+      "txHash": "0x32c31e87d76f51dddbed4397ce4fabbada0abb7edb758b3ffa4721fb8ae241b1",
+      "timestamp": 1753903561,
+      "data": {
+        "token": "0xd30D8CA2E7715eE6804a287eB86FAfC0839b1380",
+        "amount": "120000000000000000"
       }
     }
   ]

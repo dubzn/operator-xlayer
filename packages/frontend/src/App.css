@@ -626,7 +626,6 @@
   color: var(--text-primary);
 }
 
-.selector-manual,
 .stacked-form,
 .create-vault-actions {
   display: grid;

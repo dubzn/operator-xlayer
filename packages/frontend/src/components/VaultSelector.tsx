@@ -11,7 +11,6 @@ interface Props {
 
 export function VaultSelector({ publicClient, address, selectedVault, onSelect }: Props) {
   const [vaults, setVaults] = useState<Address[]>([]);
-  const [manualInput, setManualInput] = useState("");
 
   const fetchVaults = useCallback(() => {
     publicClient
@@ -40,9 +39,7 @@ export function VaultSelector({ publicClient, address, selectedVault, onSelect }
       </div>
 
       {vaults.length === 0 ? (
-        <p className="muted-copy selector-empty">
-          No vaults found for this wallet yet. You can still load a vault address manually.
-        </p>
+        <p className="muted-copy selector-empty">No vaults found for this wallet yet.</p>
       ) : (
         <div className="vault-chip-grid">
           {vaults.map((vault) => (
@@ -61,31 +58,6 @@ export function VaultSelector({ publicClient, address, selectedVault, onSelect }
           ))}
         </div>
       )}
-
-      <div className="selector-manual">
-        <label className="field-label" htmlFor="manual-vault-address">
-          Manual vault address
-        </label>
-        <div className="glass-input-row">
-          <input
-            id="manual-vault-address"
-            type="text"
-            placeholder="0x... vault address"
-            value={manualInput}
-            onChange={(event) => setManualInput(event.target.value)}
-          />
-          <button
-            className="btn btn-ghost"
-            onClick={() => {
-              if (manualInput.startsWith("0x")) {
-                onSelect(manualInput as Address);
-              }
-            }}
-          >
-            Load
-          </button>
-        </div>
-      </div>
     </section>
   );
 }
