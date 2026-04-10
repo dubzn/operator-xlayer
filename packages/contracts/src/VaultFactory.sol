@@ -9,8 +9,7 @@ import {IExecutionRegistry} from "./interfaces/IExecutionRegistry.sol";
 contract VaultFactory {
     IExecutionRegistry public immutable registry;
     address public immutable operator;
-    address public immutable trustedRouter;
-    address public immutable approvalTarget;
+    address public immutable defaultSwapAdapter;
 
     address[] public vaults;
     mapping(address => address[]) public vaultsByOwner;
@@ -24,13 +23,11 @@ contract VaultFactory {
     constructor(
         address _registry,
         address _operator,
-        address _trustedRouter,
-        address _approvalTarget
+        address _defaultSwapAdapter
     ) {
         registry = IExecutionRegistry(_registry);
         operator = _operator;
-        trustedRouter = _trustedRouter;
-        approvalTarget = _approvalTarget;
+        defaultSwapAdapter = _defaultSwapAdapter;
     }
 
     /// @notice Deploy a new vault. Caller becomes the owner.
@@ -45,8 +42,7 @@ contract VaultFactory {
             msg.sender,      // owner = caller
             baseToken,
             operator,        // shared operator across all vaults
-            trustedRouter,   // shared router across all vaults
-            approvalTarget,  // DEX token approval contract
+            defaultSwapAdapter,
             maxAmountPerTrade,
             maxDailyVolume,
             maxSlippageBps,

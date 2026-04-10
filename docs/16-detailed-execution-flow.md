@@ -1,144 +1,157 @@
-# 16. Detailed Execution Flow: Backend ↔ x402 ↔ Contracts
+# 16. Detailed Execution Flow: Preview -> x402 -> Contracts
 
 ## Full flow
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  CONTROLLER AGENT (TreasuryBot)                                     │
-│                                                                     │
-│  1. Construye ExecutionIntent:                                      │
-│     { vaultAddress, controller, tokenIn, tokenOut,                  │
-│       amount, maxSlippageBps, nonce, deadline }                     │
-│                                                                     │
-│  2. Firma EIP-712 con su private key                                │
-│     domain: { name: "X402Operator", version: "1",                   │
-│              chainId: 196, verifyingContract: vaultAddress }        │
-│                                                                     │
-│  3. POST /execute  →  envía { intent, signature }                   │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  OPERATOR BACKEND                                                   │
-│                                                                     │
-│  4. Recibe request, detecta que no hay pago                         │
-│     → Responde HTTP 402 Payment Required                            │
-│     → Incluye: fee amount, payment address, payment instructions    │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  CONTROLLER AGENT                                                   │
-│                                                                     │
-│  5. Recibe el 402                                                   │
-│  6. Paga el fee via x402 (tx onchain, token transfer al operator)   │
-│  7. Re-envía POST /execute con proof de pago (paymentReference)     │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  OPERATOR BACKEND — Validación                                      │
-│                                                                     │
-│  8.  Verificar x402 payment (¿pagó? ¿monto correcto?)              │
-│  9.  Verificar firma EIP-712 → recuperar controller address         │
-│  10. Verificar que controller está en allowlist del vault            │
-│  11. Verificar nonce no usado                                       │
-│  12. Verificar deadline no expirado                                 │
-│                                                                     │
-│  Si algo falla → 400/401/403 con error claro                       │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  OPERATOR BACKEND — Preparación                                     │
-│                                                                     │
-│  13. Llama OnchainOS Trade API:                                     │
-│      → envía tokenIn, tokenOut, amount                              │
-│      ← recibe: route, quote, expectedOut, execution payload         │
-│                                                                     │
-│  14. (Opcional) Llama OnchainOS Market → precio actual              │
-│  15. (Opcional) Llama OnchainOS Security → risk check               │
-│                                                                     │
-│  16. Valida que el quote cumple maxSlippageBps del intent           │
-│      Si no cumple → aborta, no gasta gas                            │
-│                                                                     │
-│  17. Arma la transacción:                                           │
-│      vault.executeSwap(intent, routeData, signature,                │
-│                         paymentRef, registryAddress)                │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  OPERATORVAULT.SOL — Ejecución onchain                              │
-│                                                                     │
-│  18. Validaciones onchain (la "frontera dura"):                     │
-│      ✓ msg.sender == authorizedOperator                             │
-│      ✓ recover(signature) ∈ authorizedControllers                   │
-│      ✓ nonce no usado → marcar como usado                           │
-│      ✓ block.timestamp <= deadline                                  │
-│      ✓ tokenIn y tokenOut ∈ allowedTokens                          │
-│      ✓ amount <= maxAmountPerTrade                                  │
-│      ✓ dailyVolume + amount <= maxDailyVolume                       │
-│      ✓ block.timestamp >= lastExecution + cooldownSeconds           │
-│      ✓ !paused                                                      │
-│                                                                     │
-│  19. Si TODO pasa:                                                   │
-│      → Ejecuta el swap con la routeData (call al DEX router)       │
-│      → Valida slippage post-ejecución                               │
-│      → Actualiza dailyVolume, lastExecution                         │
-│      → Emite ExecutionSucceeded event                               │
-│                                                                     │
-│  20. Si ALGO falla → revert (gas perdido, pero fondos seguros)      │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  EXECUTIONREGISTRY.SOL — Receipt                                    │
-│                                                                     │
-│  21. El vault (o el operator) llama al registry:                    │
-│      → Graba receipt: jobId, vault, controller, operator,           │
-│        paymentRef, txHash, tokenIn/Out, amountIn/Out,               │
-│        realizedSlippage, timestamp, status                          │
-│      → Actualiza track record: successCount++,                      │
-│        avgSlippageDeltaBps                                          │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  OPERATOR BACKEND — Respuesta                                       │
-│                                                                     │
-│  22. Retorna al controller:                                         │
-│      { status: "success", jobId, txHash, receiptRef }               │
-└─────────────────────────────────────────────────────────────────────┘
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  CONTROLLER AGENT                                                           │
+│                                                                              │
+│  1. Builds a draft preview request                                           │
+│     { vaultAddress, controller, adapter, tokenIn, tokenOut, amountIn, ... } │
+│                                                                              │
+│  2. POST /preview                                                            │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  OPERATOR BACKEND — PREVIEW                                                  │
+│                                                                              │
+│  3. Reads the live vault state                                               │
+│  4. Fetches an OKX DEX quote                                                 │
+│  5. Derives policyMinAmountOut from quotedAmountOut                          │
+│  6. Computes executionHash = keccak256(routeData)                            │
+│  7. Caches the quote package by executionHash                                │
+│  8. Returns preview { expectedOut, minAmountOut, executionHash, fee, ... }   │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  CONTROLLER AGENT                                                            │
+│                                                                              │
+│  9. Copies preview values into the final ExecutionIntent                     │
+│  10. Signs EIP-712                                                           │
+│      domain: { name: "X402Operator", version: "2",                           │
+│                chainId: 196, verifyingContract: vaultAddress }               │
+│                                                                              │
+│  11. POST /execute with { intent, signature }                                │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  OPERATOR BACKEND — PAYMENT GATE                                             │
+│                                                                              │
+│  12. No paymentReference yet                                                 │
+│      -> respond HTTP 402 Payment Required                                    │
+│      -> include fee amount, fee token, operator payment address              │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  CONTROLLER AGENT                                                            │
+│                                                                              │
+│  13. Pays the fee via ERC-20 transfer                                        │
+│  14. Re-sends POST /execute with paymentReference                            │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  OPERATOR BACKEND — VALIDATION                                               │
+│                                                                              │
+│  15. Loads cached quote by intent.executionHash                              │
+│  16. Checks cached adapter == intent.adapter                                 │
+│  17. Checks cached expectedOut == intent.quotedAmountOut                     │
+│  18. Checks intent.minAmountOut >= cached policy floor                       │
+│  19. Verifies x402 payment onchain                                           │
+│  20. Verifies EIP-712 signature                                              │
+│  21. Re-reads vault policy snapshot                                          │
+│  22. Rejects early if nonce, policy, or expiry no longer fit                 │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  OPERATOR BACKEND — EXECUTION                                                │
+│                                                                              │
+│  23. Calls vault.executeSwap(intent, routeData, signature, paymentRef, ...)  │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  OPERATORVAULT.SOL                                                           │
+│                                                                              │
+│  24. Re-validates onchain:                                                   │
+│      - operator caller                                                       │
+│      - vault address                                                         │
+│      - adapter allowlist                                                     │
+│      - controller signature match                                            │
+│      - controller allowlist                                                  │
+│      - nonce                                                                 │
+│      - deadline                                                              │
+│      - input/output token allowlists                                         │
+│      - pair allowlist                                                        │
+│      - per-trade cap                                                         │
+│      - daily volume                                                          │
+│      - cooldown                                                              │
+│      - executionHash                                                         │
+│      - policy floor for minAmountOut                                         │
+│                                                                              │
+│  25. Delegatecalls the selected swap adapter                                 │
+│  26. Validates realized amountOut >= intent.minAmountOut                     │
+│  27. Updates accounting and emits ExecutionSucceeded                         │
+│  28. Records a receipt in ExecutionRegistry                                  │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  EXECUTIONREGISTRY                                                           │
+│                                                                              │
+│  29. Stores { jobId, vault, controller, operator, adapter, paymentRef, ... }│
+│  30. Increments operator successCount                                        │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  OPERATOR BACKEND                                                            │
+│                                                                              │
+│  31. Returns { status: "success", jobId, txHash }                            │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## The 3 clear boundaries
+## The 4 key boundaries
 
-| Boundary | Who decides | What it validates |
-|---|---|---|
-| **x402 (payment)** | Backend | "Did you pay for the service?" |
-| **EIP-712 signature** | Backend + Vault | "Did the controller authorize this exact action?" |
-| **Onchain policy** | Vault (only) | "Does the action comply with the owner's rules?" |
+| Boundary | What it answers |
+|---|---|
+| **Preview** | "What exact swap package am I being asked to sign?" |
+| **EIP-712 signature** | "Did the controller approve this exact execution package?" |
+| **x402 payment** | "Did the caller pay for the execution service?" |
+| **Vault policy** | "Does the owner's onchain policy still allow this swap?" |
 
 ## Redundant validation by design
 
-The backend validates **before** spending gas (steps 8-16). The vault **re-validates everything onchain** (step 18). This is intentionally redundant — the backend filters junk to avoid wasting gas, but the vault is the final authority.
+The backend validates before spending gas. The vault validates again onchain before moving capital.
+
+That redundancy is intentional:
+
+- backend filtering saves gas
+- vault validation is the hard security boundary
 
 ## Key identifiers
 
-- `intentHash` = hash of the signed ExecutionIntent fields
+- `intentHash` = hash of the signed EIP-712 intent
+- `executionHash` = hash of the exact cached calldata
 - `jobId = keccak256(intentHash, paymentReference)` = canonical identifier of a paid execution attempt
-- `paymentReference` = proof linking the x402 payment to this specific job
 
-## What the controller signs (EIP-712)
+## What the controller signs
 
-The controller signs the execution bounds, NOT the route data:
-- vaultAddress
-- controller
-- tokenIn / tokenOut
+The controller signs:
+
+- vault address
+- controller address
+- adapter
+- token pair
 - amount
-- maxSlippageBps
+- quote-derived output bounds
 - nonce
 - deadline
+- `executionHash`
 
-The route/quote is backend-prepared after the signature. The vault enforces that the execution result stays within the signed bounds.
+The controller is therefore approving the exact execution package that the operator can submit, not just a vague instruction to trade.

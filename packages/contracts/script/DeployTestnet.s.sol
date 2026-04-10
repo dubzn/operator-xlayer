@@ -5,6 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {OperatorVault} from "../src/OperatorVault.sol";
 import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
 import {MockRouter} from "../src/MockRouter.sol";
+import {OkxAggregatorSwapAdapter} from "../src/OkxAggregatorSwapAdapter.sol";
 
 contract DeployTestnet is Script {
     function run() external {
@@ -31,13 +32,16 @@ contract DeployTestnet is Script {
         ExecutionRegistry registry = new ExecutionRegistry();
         console.log("ExecutionRegistry:", address(registry));
 
-        // 3. Deploy OperatorVault
+        // 3. Deploy Mock-backed swap adapter
+        OkxAggregatorSwapAdapter adapter = new OkxAggregatorSwapAdapter(address(router), address(router));
+        console.log("Mock Swap Adapter:", address(adapter));
+
+        // 4. Deploy OperatorVault
         OperatorVault vault = new OperatorVault(
             deployer,       // owner
             usdt,           // baseToken (USDT)
             deployer,       // operator (same wallet for testnet)
-            address(router),// trustedRouter
-            address(0),     // approvalTarget defaults to router
+            address(adapter),
             maxPerTrade,
             maxDailyVolume,
             maxSlippageBps,
@@ -45,10 +49,11 @@ contract DeployTestnet is Script {
         );
         console.log("OperatorVault:", address(vault));
 
-        // 4. Configure
+        // 5. Configure
         registry.authorizeVault(address(vault));
         vault.authorizeController(deployer); // controller = deployer for testnet
         vault.addAllowedToken(usdc);         // allow USDT -> USDC swaps
+        vault.allowPair(usdt, usdc);
 
         console.log("--- Config ---");
         console.log("Owner/Operator/Controller:", deployer);

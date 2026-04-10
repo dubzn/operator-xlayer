@@ -14,7 +14,7 @@ Owns:
 
 Definition of done:
 - core authorization and policy tests pass
-- contracts can be deployed to testnet or equivalent environment
+- contracts can be deployed to X Layer mainnet
 - receipt path is stable enough for backend integration
 - EIP-712 intent verification is settled end to end
 
@@ -98,7 +98,7 @@ Definition of done:
 
 ### Day 6
 - build one controller demo agent
-- run end-to-end flows against test deployments
+- run end-to-end flows against deployed mainnet contracts
 - harden receipt shape and debug transaction packaging
 
 ### Day 7
@@ -107,8 +107,8 @@ Definition of done:
 - refine demo path and reduce visual noise
 
 ### Day 8
-- deploy to X Layer mainnet if the system is stable
-- produce real activity for the demo and the judges
+- produce real mainnet activity for the demo and the judges
+- validate the deployed path end to end
 - prepare README visuals and final docs polish
 
 ### Day 9

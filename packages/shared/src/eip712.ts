@@ -3,7 +3,7 @@ import type { ExecutionIntent } from "./types.js";
 
 export const EIP712_DOMAIN = {
   name: "X402Operator",
-  version: "1",
+  version: "2",
   chainId: parseInt(process.env.CHAIN_ID || "196"),
 };
 
@@ -11,12 +11,15 @@ export const EXECUTION_INTENT_TYPES = {
   ExecutionIntent: [
     { name: "vaultAddress", type: "address" },
     { name: "controller", type: "address" },
+    { name: "adapter", type: "address" },
     { name: "tokenIn", type: "address" },
     { name: "tokenOut", type: "address" },
-    { name: "amount", type: "uint256" },
-    { name: "maxSlippageBps", type: "uint256" },
+    { name: "amountIn", type: "uint256" },
+    { name: "quotedAmountOut", type: "uint256" },
+    { name: "minAmountOut", type: "uint256" },
     { name: "nonce", type: "uint256" },
     { name: "deadline", type: "uint256" },
+    { name: "executionHash", type: "bytes32" },
   ],
 };
 
@@ -56,4 +59,8 @@ export function computeJobId(intentHash: string, paymentRef: string): string {
     ["bytes32", "bytes32"],
     [intentHash, paymentRef]
   );
+}
+
+export function computeExecutionHash(executionData: string): string {
+  return ethers.keccak256(executionData);
 }

@@ -1,15 +1,17 @@
-import { ethers } from "ethers";
 import { recoverIntentSigner } from "@x402-operator/shared";
 import type { ExecutionIntent } from "@x402-operator/shared";
 import { config, getProvider } from "../config.js";
 import { OperatorVaultABI } from "../abi.js";
+import { ethers } from "ethers";
 
 export interface IntentPolicySnapshot {
   blockTimestamp: number;
   controllerAuthorized: boolean;
+  adapterAllowed: boolean;
   nonceUsed: boolean;
+  inputTokenAllowed: boolean;
   tokenOutAllowed: boolean;
-  baseToken: string;
+  pairAllowed: boolean;
   maxAmountPerTrade: bigint;
   maxDailyVolume: bigint;
   maxSlippageBps: bigint;
@@ -18,19 +20,20 @@ export interface IntentPolicySnapshot {
   lastExecution: bigint;
   cooldownSeconds: bigint;
   paused: boolean;
-  trustedRouter: string;
 }
 
 export interface PolicyCheckSummary {
   controllerAuthorized: boolean;
+  adapterAllowed: boolean;
   nonceAvailable: boolean;
-  tokenInMatchesBaseToken: boolean;
-  tokenOutAllowed: boolean;
+  inputTokenAllowed: boolean;
+  outputTokenAllowed: boolean;
+  pairAllowed: boolean;
   amountWithinLimit: boolean;
   withinDailyVolume: boolean;
   cooldownMet: boolean;
   vaultNotPaused: boolean;
-  effectiveMaxSlippageBps: number;
+  policyMinAmountOut: string;
 }
 
 export async function readIntentPolicySnapshot(
@@ -44,11 +47,12 @@ export async function readIntentPolicySnapshot(
     throw new Error("Failed to fetch latest block for validation");
   }
 
-  // Sequential calls — X Layer RPC rejects large batches
   const controllerAuthorized = await vault.authorizedControllers(intent.controller);
+  const adapterAllowed = await vault.allowedSwapAdapters(intent.adapter);
   const nonceUsed = await vault.usedNonces(intent.nonce);
+  const inputTokenAllowed = await vault.allowedInputTokens(intent.tokenIn);
   const tokenOutAllowed = await vault.allowedTokens(intent.tokenOut);
-  const baseToken = await vault.baseToken();
+  const pairAllowed = await vault.allowedPairs(intent.tokenIn, intent.tokenOut);
   const maxAmountPerTrade = await vault.maxAmountPerTrade();
   const maxDailyVolume = await vault.maxDailyVolume();
   const maxSlippageBps = await vault.maxSlippageBps();
@@ -57,14 +61,15 @@ export async function readIntentPolicySnapshot(
   const lastExecution = await vault.lastExecution();
   const cooldownSeconds = await vault.cooldownSeconds();
   const paused = await vault.paused();
-  const trustedRouter = await vault.trustedRouter();
 
   return {
     blockTimestamp: block.timestamp,
     controllerAuthorized,
+    adapterAllowed,
     nonceUsed,
+    inputTokenAllowed,
     tokenOutAllowed,
-    baseToken: String(baseToken),
+    pairAllowed,
     maxAmountPerTrade: BigInt(maxAmountPerTrade),
     maxDailyVolume: BigInt(maxDailyVolume),
     maxSlippageBps: BigInt(maxSlippageBps),
@@ -73,27 +78,28 @@ export async function readIntentPolicySnapshot(
     lastExecution: BigInt(lastExecution),
     cooldownSeconds: BigInt(cooldownSeconds),
     paused,
-    trustedRouter: String(trustedRouter),
   };
 }
 
 export function buildPolicyCheckSummary(
   intent: ExecutionIntent,
-  snapshot: IntentPolicySnapshot
+  snapshot: IntentPolicySnapshot,
+  quotedAmountOutOverride?: bigint
 ): PolicyCheckSummary {
   const today = BigInt(Math.floor(snapshot.blockTimestamp / 86400));
   const effectiveDailyUsed = today === snapshot.currentDay ? snapshot.dailyVolumeUsed : 0n;
-  const amount = BigInt(intent.amount);
+  const amount = BigInt(intent.amountIn);
   const cooldownDeadline = snapshot.lastExecution + snapshot.cooldownSeconds;
-  const effectiveMaxSlippageBps = snapshot.maxSlippageBps < BigInt(intent.maxSlippageBps)
-    ? snapshot.maxSlippageBps
-    : BigInt(intent.maxSlippageBps);
+  const quotedAmountOut = quotedAmountOutOverride ?? BigInt(intent.quotedAmountOut || "0");
+  const policyMinAmountOut = (quotedAmountOut * (10_000n - snapshot.maxSlippageBps)) / 10_000n;
 
   return {
     controllerAuthorized: snapshot.controllerAuthorized,
+    adapterAllowed: snapshot.adapterAllowed,
     nonceAvailable: !snapshot.nonceUsed,
-    tokenInMatchesBaseToken: intent.tokenIn.toLowerCase() === snapshot.baseToken.toLowerCase(),
-    tokenOutAllowed: snapshot.tokenOutAllowed,
+    inputTokenAllowed: snapshot.inputTokenAllowed,
+    outputTokenAllowed: snapshot.tokenOutAllowed,
+    pairAllowed: snapshot.pairAllowed,
     amountWithinLimit: amount <= snapshot.maxAmountPerTrade,
     withinDailyVolume:
       snapshot.maxDailyVolume === 0n || effectiveDailyUsed + amount <= snapshot.maxDailyVolume,
@@ -102,14 +108,10 @@ export function buildPolicyCheckSummary(
       snapshot.lastExecution === 0n ||
       BigInt(snapshot.blockTimestamp) >= cooldownDeadline,
     vaultNotPaused: !snapshot.paused,
-    effectiveMaxSlippageBps: Number(effectiveMaxSlippageBps),
+    policyMinAmountOut: policyMinAmountOut.toString(),
   };
 }
 
-/**
- * Validates an ExecutionIntent offchain before spending gas.
- * The vault re-validates everything onchain — this is a gas-saving filter.
- */
 export async function validateIntent(
   intent: ExecutionIntent,
   signature: string
@@ -118,7 +120,10 @@ export async function validateIntent(
     return { valid: false, error: "Vault address mismatch" };
   }
 
-  // 1. Recover signer from EIP-712 signature
+  if (intent.adapter.toLowerCase() !== config.swapAdapterAddress.toLowerCase()) {
+    return { valid: false, error: "Unsupported swap adapter for this operator" };
+  }
+
   let controller: string;
   try {
     controller = recoverIntentSigner(intent, signature);
@@ -128,6 +133,10 @@ export async function validateIntent(
 
   if (controller.toLowerCase() !== intent.controller.toLowerCase()) {
     return { valid: false, error: "Controller field does not match recovered signer" };
+  }
+
+  if (intent.executionHash === ethers.ZeroHash) {
+    return { valid: false, error: "Execution hash missing" };
   }
 
   let snapshot: IntentPolicySnapshot;
@@ -142,47 +151,52 @@ export async function validateIntent(
 
   const summary = buildPolicyCheckSummary(intent, snapshot);
 
-  // 2. Check controller is authorized
   if (!summary.controllerAuthorized) {
     return { valid: false, error: `Controller ${controller} is not authorized` };
   }
 
-  // 3. Check nonce not used
+  if (!summary.adapterAllowed) {
+    return { valid: false, error: "Selected swap adapter is not allowlisted on the vault" };
+  }
+
   if (!summary.nonceAvailable) {
     return { valid: false, error: `Nonce ${intent.nonce} already used` };
   }
 
-  // 4. Check deadline
   if (snapshot.blockTimestamp > intent.deadline) {
     return { valid: false, error: "Intent has expired" };
   }
 
-  // 5. Check tokens
-  if (!summary.tokenInMatchesBaseToken) {
-    return { valid: false, error: "tokenIn must match vault baseToken" };
+  if (!summary.inputTokenAllowed) {
+    return { valid: false, error: "tokenIn not in allowlist" };
   }
 
-  if (!summary.tokenOutAllowed) {
+  if (!summary.outputTokenAllowed) {
     return { valid: false, error: "tokenOut not in allowlist" };
+  }
+
+  if (!summary.pairAllowed) {
+    return { valid: false, error: "token pair not in allowlist" };
   }
 
   if (!summary.vaultNotPaused) {
     return { valid: false, error: "Vault is paused" };
   }
 
-  // 6. Check amount
   if (!summary.amountWithinLimit) {
     return { valid: false, error: `Amount exceeds max per trade (${snapshot.maxAmountPerTrade})` };
   }
 
-  // 7. Check daily volume using same UTC day bucket semantics as the vault
   if (!summary.withinDailyVolume) {
     return { valid: false, error: "Daily volume cap would be exceeded" };
   }
 
-  // 8. Check per-vault cooldown
   if (!summary.cooldownMet) {
     return { valid: false, error: "Vault cooldown not met yet" };
+  }
+
+  if (BigInt(intent.minAmountOut) < BigInt(summary.policyMinAmountOut)) {
+    return { valid: false, error: "minAmountOut is below the vault slippage floor" };
   }
 
   return { valid: true, controller };

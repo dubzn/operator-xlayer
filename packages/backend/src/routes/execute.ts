@@ -1,9 +1,14 @@
 import { Router, Request, Response } from "express";
 import { ethers } from "ethers";
-import type { ExecuteRequest, ExecutionPreview, PreviewRequest } from "@x402-operator/shared";
+import {
+  computeExecutionHash,
+  type ExecuteRequest,
+  type ExecutionPreview,
+  type PreviewRequest,
+} from "@x402-operator/shared";
 import { ExecutionRegistryABI } from "../abi.js";
 import { config, getProvider } from "../config.js";
-import { buildPaymentChallenge, isZeroAddress, verifyPayment } from "../middleware/x402.js";
+import { buildPaymentChallenge, verifyPayment } from "../middleware/x402.js";
 import { consumePaymentReference } from "../services/paymentLedger.js";
 import {
   buildPolicyCheckSummary,
@@ -11,13 +16,14 @@ import {
   validateIntent,
 } from "../services/intentValidator.js";
 import { executeIntent } from "../services/onchainExecutor.js";
-import { getSwapQuote } from "../services/onchainos.js";
+import { getQuote, storeQuote } from "../services/quoteCache.js";
+import { getSwapQuote, resolveRoutePreferences } from "../services/onchainos.js";
 
 const router = Router();
 
 router.post("/preview", async (req: Request, res: Response) => {
   try {
-    const { intent } = req.body as PreviewRequest;
+    const { intent, routePreferences } = req.body as PreviewRequest;
 
     if (!intent) {
       res.status(400).json({ error: "Missing intent" });
@@ -30,20 +36,32 @@ router.post("/preview", async (req: Request, res: Response) => {
     }
 
     const snapshot = await readIntentPolicySnapshot(intent);
-    const summary = buildPolicyCheckSummary(intent, snapshot);
+    const appliedRoutePreferences = resolveRoutePreferences(routePreferences);
     const quote = await getSwapQuote(
       intent.tokenIn,
       intent.tokenOut,
-      intent.amount,
-      config.vaultAddress
+      intent.amountIn,
+      config.vaultAddress,
+      appliedRoutePreferences
     );
+    const summary = buildPolicyCheckSummary(intent, snapshot, BigInt(quote.expectedOut));
 
     const riskFlags: string[] = [];
     const warnings: string[] = [];
 
+    if (intent.adapter.toLowerCase() !== config.swapAdapterAddress.toLowerCase()) {
+      riskFlags.push("adapter-not-supported-by-operator");
+      warnings.push("This operator currently only supports its configured OKX swap adapter.");
+    }
+
     if (!summary.controllerAuthorized) {
       riskFlags.push("controller-not-authorized");
       warnings.push("The controller is not authorized on the vault right now.");
+    }
+
+    if (!summary.adapterAllowed) {
+      riskFlags.push("adapter-not-allowlisted");
+      warnings.push("The selected swap adapter is not allowlisted on the vault.");
     }
 
     if (!summary.nonceAvailable) {
@@ -56,14 +74,19 @@ router.post("/preview", async (req: Request, res: Response) => {
       warnings.push("The provided deadline is already in the past.");
     }
 
-    if (!summary.tokenInMatchesBaseToken) {
-      riskFlags.push("token-in-must-match-base-token");
-      warnings.push("MVP swaps must start from the vault baseToken.");
+    if (!summary.inputTokenAllowed) {
+      riskFlags.push("token-in-not-allowed");
+      warnings.push("The selected input token is not allowlisted on the vault.");
     }
 
-    if (!summary.tokenOutAllowed) {
+    if (!summary.outputTokenAllowed) {
       riskFlags.push("token-out-not-allowed");
       warnings.push("The selected output token is not allowlisted on the vault.");
+    }
+
+    if (!summary.pairAllowed) {
+      riskFlags.push("pair-not-allowed");
+      warnings.push("The selected token pair is not allowlisted on the vault.");
     }
 
     if (!summary.amountWithinLimit) {
@@ -86,6 +109,11 @@ router.post("/preview", async (req: Request, res: Response) => {
       warnings.push("The vault is currently paused.");
     }
 
+    const executionHash = quote.routeData !== "0x"
+      ? computeExecutionHash(quote.routeData)
+      : ethers.ZeroHash;
+    const expiresAt = Math.min(intent.deadline, snapshot.blockTimestamp + 60);
+
     if (quote.routeData === "0x") {
       riskFlags.push("route-not-ready");
       warnings.push("Route data is still stubbed, so this preview is informational only.");
@@ -96,22 +124,37 @@ router.post("/preview", async (req: Request, res: Response) => {
       warnings.push("No executable quote is available yet from the trade integration.");
     }
 
+    if (executionHash !== ethers.ZeroHash) {
+      storeQuote(executionHash, {
+        adapterAddress: config.swapAdapterAddress,
+        routerAddress: quote.routerAddress,
+        routeData: quote.routeData,
+        expectedOut: quote.expectedOut,
+        minAmountOut: summary.policyMinAmountOut,
+        expiresAt,
+      });
+    }
+
     const preview: ExecutionPreview = {
-      jobClass: "single-swap",
+      jobClass: "swap-v2",
       vaultAddress: intent.vaultAddress,
       estimatedFee: {
         amount: config.operatorFee,
         token: config.feeToken,
       },
       quotedRoute: {
-        routerAddress: isZeroAddress(quote.routerAddress) ? snapshot.trustedRouter : quote.routerAddress,
+        adapterAddress: config.swapAdapterAddress,
+        routerAddress: quote.routerAddress,
         hasRouteData: quote.routeData !== "0x",
         expectedOut: quote.expectedOut,
+        minAmountOut: summary.policyMinAmountOut,
+        executionHash,
       },
       riskFlags,
       warnings,
+      routePreferencesApplied: appliedRoutePreferences,
       policyCheckSummary: summary,
-      expiresAt: Math.min(intent.deadline, snapshot.blockTimestamp + 60),
+      expiresAt,
     };
 
     res.json(preview);
@@ -128,7 +171,27 @@ router.post("/execute", async (req: Request, res: Response) => {
   try {
     const { intent, signature, paymentReference } = req.body as ExecuteRequest;
 
-    // 1. Validate intent offchain (gas-saving filter)
+    const cachedQuote = getQuote(intent.executionHash);
+    if (!cachedQuote) {
+      res.status(400).json({ error: "Preview quote missing or expired; preview again before executing" });
+      return;
+    }
+
+    if (cachedQuote.adapterAddress.toLowerCase() !== intent.adapter.toLowerCase()) {
+      res.status(400).json({ error: "Cached quote adapter does not match intent adapter" });
+      return;
+    }
+
+    if (cachedQuote.expectedOut !== intent.quotedAmountOut) {
+      res.status(400).json({ error: "Intent quotedAmountOut does not match cached quote" });
+      return;
+    }
+
+    if (BigInt(intent.minAmountOut) < BigInt(cachedQuote.minAmountOut)) {
+      res.status(400).json({ error: "Intent minAmountOut is below cached quote floor" });
+      return;
+    }
+
     const validation = await validateIntent(intent, signature);
     if (!validation.valid) {
       res.status(400).json({ error: validation.error });
@@ -157,14 +220,12 @@ router.post("/execute", async (req: Request, res: Response) => {
     }
 
     console.log(`[execute] Intent validated. Controller: ${validation.controller}`);
-    console.log(`[execute] Swap: ${intent.amount} ${intent.tokenIn} → ${intent.tokenOut}`);
+    console.log(`[execute] Swap: ${intent.amountIn} ${intent.tokenIn} -> ${intent.tokenOut}`);
 
-    // 2. Execute through vault
-    const result = await executeIntent(intent, signature, paymentReference!);
+    const result = await executeIntent(intent, signature, paymentReference, cachedQuote);
 
     console.log(`[execute] Success. JobId: ${result.jobId}, TxHash: ${result.txHash}`);
 
-    // 3. Return result
     res.json({
       status: "success",
       jobId: result.jobId,
@@ -194,6 +255,7 @@ router.get("/receipts/:jobId", async (req: Request, res: Response) => {
       vaultAddress: receipt.vault,
       controller: receipt.controller,
       operator: receipt.operator,
+      adapter: receipt.adapter,
       paymentReference: receipt.paymentRef,
       tokenIn: receipt.tokenIn,
       tokenOut: receipt.tokenOut,
