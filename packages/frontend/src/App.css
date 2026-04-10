@@ -1029,56 +1029,330 @@ input:disabled {
   font-size: 0.68rem;
 }
 
-.tab-placeholder {
+/* ── Policies tab ── */
+.policies-tab {
   display: grid;
-  justify-items: start;
-  gap: 12px;
-  min-height: 360px;
-  align-content: center;
+  gap: 20px;
 }
 
-.operations-panel {
+.policies-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.policy-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.policy-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(173, 178, 225, 0.04);
+  border: 1px solid rgba(173, 178, 225, 0.08);
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.policy-card:hover {
+  border-color: rgba(173, 178, 225, 0.16);
+  background: rgba(173, 178, 225, 0.06);
+}
+
+.policy-card-icon {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(134, 134, 172, 0.1);
+  color: var(--accent-strong);
+}
+
+.policy-card-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.policy-card-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.policy-card-unit {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Policy edit form */
+.policy-edit-form {
   display: grid;
   gap: 16px;
 }
 
-.operations-heading {
-  align-items: end;
-}
-
-.operations-heading .muted-copy {
-  max-width: 520px;
-}
-
-.operations-grid {
+.policy-edit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
-.operations-grid > article {
-  padding: 20px;
+.policy-edit-field {
   display: grid;
-  gap: 14px;
+  gap: 8px;
 }
 
-.policy-grid {
+.policy-edit-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Policy usage bar */
+.policy-usage-bar {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(173, 178, 225, 0.03);
+  border: 1px solid rgba(173, 178, 225, 0.06);
+}
+
+.policy-usage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.policy-usage-values {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.policy-usage-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(173, 178, 225, 0.08);
+  overflow: hidden;
+}
+
+.policy-usage-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-strong), var(--success));
+  transition: width 400ms ease;
+  min-width: 2px;
+}
+
+.policy-info-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
-.policy-grid > div {
+.policy-info-item {
   display: grid;
   gap: 4px;
   padding: 12px;
+  border-radius: 14px;
+  background: rgba(173, 178, 225, 0.03);
+  border: 1px solid rgba(173, 178, 225, 0.06);
+}
+
+.policy-info-item strong {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+/* ── Configuration tab ── */
+.config-tab {
+  display: grid;
+  gap: 20px;
+}
+
+.config-nav {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(173, 178, 225, 0.04);
+  border: 1px solid rgba(173, 178, 225, 0.06);
+}
+
+.config-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: all 160ms ease;
+}
+
+.config-nav-btn:hover {
+  color: var(--text-secondary);
+  background: rgba(173, 178, 225, 0.06);
+}
+
+.config-nav-btn.active {
+  color: var(--text-primary);
+  background: rgba(80, 80, 129, 0.18);
+  border-color: rgba(134, 134, 172, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.config-section {
+  display: grid;
+  gap: 16px;
+}
+
+.config-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.config-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(134, 134, 172, 0.12);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.config-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 32px 16px;
+  border-radius: 18px;
+  background: rgba(173, 178, 225, 0.02);
+  border: 1px dashed rgba(173, 178, 225, 0.1);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.config-list {
+  display: grid;
+  gap: 8px;
+}
+
+.config-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
   border-radius: 16px;
   background: rgba(173, 178, 225, 0.04);
   border: 1px solid rgba(173, 178, 225, 0.07);
+  transition: border-color 160ms ease;
 }
 
-.policy-grid strong {
+.config-list-item:hover {
+  border-color: rgba(173, 178, 225, 0.14);
+}
+
+.config-list-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.config-list-mono {
+  font-family: var(--mono);
+  font-size: 0.92rem;
   color: var(--text-primary);
+}
+
+.config-list-badge {
+  font-weight: 800;
+  font-size: 0.96rem;
+  color: var(--text-primary);
+}
+
+.config-list-full {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-add-form {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(173, 178, 225, 0.06);
+}
+
+.config-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.config-status-badge.active {
+  background: rgba(124, 198, 164, 0.14);
+  color: var(--success);
+}
+
+.config-status-badge.paused {
+  background: rgba(213, 99, 130, 0.14);
+  color: var(--danger);
+}
+
+.emergency-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(173, 178, 225, 0.03);
+  border: 1px solid rgba(173, 178, 225, 0.06);
+}
+
+.emergency-info p {
+  color: var(--text-secondary);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  border-radius: 10px;
 }
 
 .list-items {
@@ -1206,22 +1480,23 @@ input:disabled {
 
 @media (max-width: 1180px) {
   .control-strip,
-  .vault-scene,
-  .operations-grid {
+  .vault-scene {
+    grid-template-columns: 1fr;
+  }
+
+  .app-header,
+  .graph-meta {
     grid-template-columns: 1fr;
   }
 
   .app-header,
   .graph-meta,
-  .operations-heading {
-    grid-template-columns: 1fr;
-  }
-
-  .app-header,
-  .graph-meta,
-  .operations-heading,
   .deposit-modal-header {
     flex-direction: column;
+  }
+
+  .policy-info-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .wallet-connected,
@@ -1295,12 +1570,18 @@ input:disabled {
 
   .summary-stats,
   .deposit-stat-grid,
-  .policy-grid,
+  .policy-cards,
+  .policy-edit-grid,
+  .policy-info-row,
   .create-vault-grid,
   .glass-input-row,
   .deposit-modal-actions {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .config-nav {
+    flex-direction: column;
   }
 
   .glass-input-row .btn,

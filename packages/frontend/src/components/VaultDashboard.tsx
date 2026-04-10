@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { WalletClient, PublicClient, Address } from "viem";
 import type { IndexedEvent } from "../hooks/useVaultHistory";
 import type { VaultData } from "../hooks/useVaultData";
@@ -7,6 +7,7 @@ import { OPERATOR_VAULT_ABI, ERC20_ABI, ADDRESSES } from "../config/contracts";
 
 type VaultTab = "graph" | "policies" | "configuration";
 type Timeframe = "24h" | "7d" | "1M" | "3M" | "YTD" | "1Y" | "Max";
+type ConfigSection = "controllers" | "tokens" | "emergency";
 
 interface Props {
   vault: Address;
@@ -217,6 +218,17 @@ export function VaultDashboard({
   const [copied, setCopied] = useState(false);
   const [controllers, setControllers] = useState<Address[]>([]);
   const [allowedTokens, setAllowedTokens] = useState<Address[]>([]);
+  const [configSection, setConfigSection] = useState<ConfigSection>("controllers");
+
+  // Policy edit state
+  const [editingPolicy, setEditingPolicy] = useState(false);
+  const [policyDraft, setPolicyDraft] = useState({
+    maxAmountPerTrade: "",
+    maxDailyVolume: "",
+    maxSlippageBps: "",
+    cooldownSeconds: "",
+  });
+  const policyFormRef = useRef<HTMLDivElement>(null);
 
   const loadLists = useCallback(async () => {
     try {
@@ -448,7 +460,7 @@ export function VaultDashboard({
             ) : null}
           </div>
 
-          {activeTab === "graph" ? (
+          {activeTab === "graph" && (
             <div className="graph-panel">
               <div className="graph-meta">
                 <div>
@@ -509,213 +521,416 @@ export function VaultDashboard({
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="tab-placeholder">
-              <p className="eyebrow">{activeTab}</p>
-              <h3 className="display-text">Coming soon</h3>
-              <p className="muted-copy">
-                This tab is intentionally stubbed for now. Live policy and configuration controls
-                remain available in the fallback operator section below.
-              </p>
+          )}
+
+          {activeTab === "policies" && (
+            <div className="policies-tab">
+              <div className="policies-header">
+                <div>
+                  <p className="eyebrow">Risk parameters</p>
+                  <h3 className="display-text">Vault policy rules</h3>
+                </div>
+                {isOwner && walletClient && !editingPolicy && (
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setPolicyDraft({
+                        maxAmountPerTrade: (Number(data.maxAmountPerTrade) / 1e6).toString(),
+                        maxDailyVolume: (Number(data.maxDailyVolume) / 1e6).toString(),
+                        maxSlippageBps: (Number(data.maxSlippageBps) / 100).toString(),
+                        cooldownSeconds: Number(data.cooldownSeconds).toString(),
+                      });
+                      setEditingPolicy(true);
+                    }}
+                  >
+                    Edit Policy
+                  </button>
+                )}
+              </div>
+
+              {!editingPolicy ? (
+                <div className="policy-cards">
+                  <div className="policy-card">
+                    <div className="policy-card-icon">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 2L18 6v6c0 4-3.5 6.5-8 8-4.5-1.5-8-4-8-8V6l8-4z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                      </svg>
+                    </div>
+                    <span className="policy-card-label">Max per trade</span>
+                    <strong className="policy-card-value">{formatUsdFromBigInt(data.maxAmountPerTrade)}</strong>
+                    <span className="policy-card-unit">USDT</span>
+                  </div>
+                  <div className="policy-card">
+                    <div className="policy-card-icon">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M10 5v5l3.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                    <span className="policy-card-label">Daily volume cap</span>
+                    <strong className="policy-card-value">{formatUsdFromBigInt(data.maxDailyVolume)}</strong>
+                    <span className="policy-card-unit">USDT</span>
+                  </div>
+                  <div className="policy-card">
+                    <div className="policy-card-icon">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M3 17L10 3l7 14" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                        <path d="M10 11v2M10 15v0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                    <span className="policy-card-label">Max slippage</span>
+                    <strong className="policy-card-value">{(Number(data.maxSlippageBps) / 100).toFixed(2)}</strong>
+                    <span className="policy-card-unit">%</span>
+                  </div>
+                  <div className="policy-card">
+                    <div className="policy-card-icon">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M7 10h6M10 7v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                    <span className="policy-card-label">Cooldown</span>
+                    <strong className="policy-card-value">{formatCooldown(data.cooldownSeconds)}</strong>
+                    <span className="policy-card-unit">between trades</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="policy-edit-form" ref={policyFormRef}>
+                  <div className="policy-edit-grid">
+                    <label className="policy-edit-field">
+                      <span className="field-label">Max per trade (USDT)</span>
+                      <input
+                        type="number"
+                        value={policyDraft.maxAmountPerTrade}
+                        onChange={(e) => setPolicyDraft({ ...policyDraft, maxAmountPerTrade: e.target.value })}
+                        placeholder="e.g. 1000"
+                      />
+                    </label>
+                    <label className="policy-edit-field">
+                      <span className="field-label">Daily volume cap (USDT)</span>
+                      <input
+                        type="number"
+                        value={policyDraft.maxDailyVolume}
+                        onChange={(e) => setPolicyDraft({ ...policyDraft, maxDailyVolume: e.target.value })}
+                        placeholder="e.g. 10000"
+                      />
+                    </label>
+                    <label className="policy-edit-field">
+                      <span className="field-label">Max slippage (%)</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={policyDraft.maxSlippageBps}
+                        onChange={(e) => setPolicyDraft({ ...policyDraft, maxSlippageBps: e.target.value })}
+                        placeholder="e.g. 1.5"
+                      />
+                    </label>
+                    <label className="policy-edit-field">
+                      <span className="field-label">Cooldown (seconds)</span>
+                      <input
+                        type="number"
+                        value={policyDraft.cooldownSeconds}
+                        onChange={(e) => setPolicyDraft({ ...policyDraft, cooldownSeconds: e.target.value })}
+                        placeholder="e.g. 60"
+                      />
+                    </label>
+                  </div>
+                  <div className="policy-edit-actions">
+                    <button
+                      className="btn btn-ghost btn-wide"
+                      disabled={busy !== null}
+                      onClick={() => setEditingPolicy(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-primary btn-wide"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        const maxTrade = BigInt(Math.round(parseFloat(policyDraft.maxAmountPerTrade) * 1e6));
+                        const maxDaily = BigInt(Math.round(parseFloat(policyDraft.maxDailyVolume) * 1e6));
+                        const slipBps = BigInt(Math.round(parseFloat(policyDraft.maxSlippageBps) * 100));
+                        const cooldown = BigInt(Math.round(parseFloat(policyDraft.cooldownSeconds)));
+                        exec("update-policy", () =>
+                          writeVault("updatePolicy", [maxTrade, maxDaily, slipBps, cooldown])
+                        );
+                        setEditingPolicy(false);
+                      }}
+                    >
+                      {busy === "update-policy" ? "Updating..." : "Save Policy"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="policy-usage-bar">
+                <div className="policy-usage-header">
+                  <span className="field-label">Daily volume usage</span>
+                  <span className="policy-usage-values">
+                    {formatUsdFromBigInt(data.dailyVolumeUsed)} / {formatUsdFromBigInt(data.maxDailyVolume)} USDT
+                  </span>
+                </div>
+                <div className="policy-usage-track">
+                  <div
+                    className="policy-usage-fill"
+                    style={{
+                      width: `${data.maxDailyVolume > 0n ? Math.min(Number((data.dailyVolumeUsed * 100n) / data.maxDailyVolume), 100) : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="policy-info-row">
+                <div className="policy-info-item">
+                  <span className="field-label">Operator</span>
+                  <strong>{shortAddr(data.operator)}</strong>
+                </div>
+                <div className="policy-info-item">
+                  <span className="field-label">Last execution</span>
+                  <strong>
+                    {data.lastExecution > 0n
+                      ? new Date(Number(data.lastExecution) * 1000).toLocaleDateString()
+                      : "Never"}
+                  </strong>
+                </div>
+                <div className="policy-info-item">
+                  <span className="field-label">USDT balance</span>
+                  <strong>{formatUsdFromBigInt(data.balanceUsdt)}</strong>
+                </div>
+                <div className="policy-info-item">
+                  <span className="field-label">USDC balance</span>
+                  <strong>{formatUsdFromBigInt(data.balanceUsdc)}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "configuration" && (
+            <div className="config-tab">
+              <div className="config-nav">
+                {(["controllers", "tokens", "emergency"] as ConfigSection[]).map((section) => (
+                  <button
+                    key={section}
+                    className={`config-nav-btn ${configSection === section ? "active" : ""}`}
+                    onClick={() => setConfigSection(section)}
+                  >
+                    {section === "controllers" && (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.3"/>
+                        <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                      </svg>
+                    )}
+                    {section === "tokens" && (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3"/>
+                        <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                      </svg>
+                    )}
+                    {section === "emergency" && (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                        <path d="M8 7v3M8 11.5v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                      </svg>
+                    )}
+                    <span>{section === "controllers" ? "Controllers" : section === "tokens" ? "Allowed Tokens" : "Emergency"}</span>
+                  </button>
+                ))}
+              </div>
+
+              {configSection === "controllers" && (
+                <div className="config-section">
+                  <div className="config-section-header">
+                    <div>
+                      <h4 className="display-text">Authorized controllers</h4>
+                      <p className="muted-copy">
+                        Addresses that can submit execution intents to this vault.
+                      </p>
+                    </div>
+                    <span className="config-count">{controllers.length}</span>
+                  </div>
+
+                  {controllers.length === 0 ? (
+                    <div className="config-empty">
+                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="12" r="5" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M6 28c0-5.5 4.5-9 10-9s10 3.5 10 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                      <p>No controllers authorized yet.</p>
+                    </div>
+                  ) : (
+                    <div className="config-list">
+                      {controllers.map((controller) => (
+                        <div key={controller} className="config-list-item">
+                          <div className="config-list-info">
+                            <span className="config-list-mono">{shortAddr(controller)}</span>
+                            <span className="config-list-full">{controller}</span>
+                          </div>
+                          {isOwner && walletClient && (
+                            <button
+                              className="btn btn-danger btn-sm"
+                              disabled={busy !== null}
+                              onClick={() =>
+                                exec("revoke-controller", () => writeVault("revokeController", [controller]))
+                              }
+                            >
+                              {busy === "revoke-controller" ? "..." : "Revoke"}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isOwner && walletClient && (
+                    <div className="config-add-form">
+                      <label className="field-label" htmlFor="controller-address">
+                        Add controller
+                      </label>
+                      <div className="glass-input-row">
+                        <input
+                          id="controller-address"
+                          type="text"
+                          placeholder="0x... controller address"
+                          value={controllerInput}
+                          onChange={(e) => setControllerInput(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-primary"
+                          disabled={busy !== null || !controllerInput.startsWith("0x")}
+                          onClick={() => {
+                            exec("add-controller", () => writeVault("authorizeController", [controllerInput]));
+                            setControllerInput("");
+                          }}
+                        >
+                          {busy === "add-controller" ? "Adding..." : "Authorize"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {configSection === "tokens" && (
+                <div className="config-section">
+                  <div className="config-section-header">
+                    <div>
+                      <h4 className="display-text">Allowed output tokens</h4>
+                      <p className="muted-copy">
+                        Tokens that the vault is allowed to receive as swap output.
+                      </p>
+                    </div>
+                    <span className="config-count">{allowedTokens.length}</span>
+                  </div>
+
+                  {allowedTokens.length === 0 ? (
+                    <div className="config-empty">
+                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M11 16h10M16 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                      <p>No tokens in the allowlist yet.</p>
+                    </div>
+                  ) : (
+                    <div className="config-list">
+                      {allowedTokens.map((token) => (
+                        <div key={token} className="config-list-item">
+                          <div className="config-list-info">
+                            <span className="config-list-badge">{tokenLabel(token)}</span>
+                            <span className="config-list-full">{token}</span>
+                          </div>
+                          {isOwner && walletClient && (
+                            <button
+                              className="btn btn-danger btn-sm"
+                              disabled={busy !== null}
+                              onClick={() =>
+                                exec("remove-token", () => writeVault("removeAllowedToken", [token]))
+                              }
+                            >
+                              {busy === "remove-token" ? "..." : "Remove"}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isOwner && walletClient && (
+                    <div className="config-add-form">
+                      <label className="field-label" htmlFor="token-address">
+                        Add token to allowlist
+                      </label>
+                      <div className="glass-input-row">
+                        <input
+                          id="token-address"
+                          type="text"
+                          placeholder="0x... token address"
+                          value={tokenInput}
+                          onChange={(e) => setTokenInput(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-primary"
+                          disabled={busy !== null || !tokenInput.startsWith("0x")}
+                          onClick={() => {
+                            exec("add-token", () => writeVault("addAllowedToken", [tokenInput]));
+                            setTokenInput("");
+                          }}
+                        >
+                          {busy === "add-token" ? "Adding..." : "Add Token"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {configSection === "emergency" && (
+                <div className="config-section">
+                  <div className="config-section-header">
+                    <div>
+                      <h4 className="display-text">Emergency controls</h4>
+                      <p className="muted-copy">
+                        Immediately pause or resume all delegated execution at the vault level.
+                      </p>
+                    </div>
+                    <span className={`config-status-badge ${data.paused ? "paused" : "active"}`}>
+                      {data.paused ? "Paused" : "Active"}
+                    </span>
+                  </div>
+
+                  <div className="emergency-panel">
+                    <div className="emergency-info">
+                      <p>
+                        When paused, no controller can execute swaps through this vault.
+                        Deposits and withdrawals by the owner remain available.
+                      </p>
+                    </div>
+
+                    {isOwner && walletClient ? (
+                      <button
+                        className={`btn ${data.paused ? "btn-primary" : "btn-danger"} btn-wide`}
+                        disabled={busy !== null}
+                        onClick={() =>
+                          exec("pause-toggle", () => writeVault(data.paused ? "unpause" : "pause", []))
+                        }
+                      >
+                        {busy === "pause-toggle"
+                          ? "Submitting..."
+                          : data.paused
+                            ? "Unpause Vault"
+                            : "Pause Vault"}
+                      </button>
+                    ) : (
+                      <p className="muted-copy">Only the vault owner can toggle the pause state.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
       </section>
 
       {error ? <p className="error dashboard-error">{error}</p> : null}
-
-      <section className="operations-panel">
-        <div className="operations-heading">
-          <div>
-            <p className="eyebrow">Fallback controls</p>
-            <h3 className="display-text">Live policy and operator management</h3>
-          </div>
-          <p className="muted-copy">
-            `Policies` and `Configuration` tabs are staged visually in the hero. The live controls
-            stay here until those tabs are fully implemented.
-          </p>
-        </div>
-
-        <div className="operations-grid">
-          <article className="liquid-panel liquid-panel-soft">
-            <p className="eyebrow">Policy snapshot</p>
-            <h4 className="display-text">Current rules</h4>
-            <div className="policy-grid">
-              <div>
-                <span className="field-label">Max per trade</span>
-                <strong>{formatUsdFromBigInt(data.maxAmountPerTrade)} USDT</strong>
-              </div>
-              <div>
-                <span className="field-label">Daily cap</span>
-                <strong>{formatUsdFromBigInt(data.maxDailyVolume)} USDT</strong>
-              </div>
-              <div>
-                <span className="field-label">Daily used</span>
-                <strong>{formatUsdFromBigInt(data.dailyVolumeUsed)} USDT</strong>
-              </div>
-              <div>
-                <span className="field-label">Slippage</span>
-                <strong>{Number(data.maxSlippageBps) / 100}%</strong>
-              </div>
-              <div>
-                <span className="field-label">Cooldown</span>
-                <strong>{formatCooldown(data.cooldownSeconds)}</strong>
-              </div>
-              <div>
-                <span className="field-label">Operator</span>
-                <strong>{shortAddr(data.operator)}</strong>
-              </div>
-              <div>
-                <span className="field-label">USDT</span>
-                <strong>{formatUsdFromBigInt(data.balanceUsdt)}</strong>
-              </div>
-              <div>
-                <span className="field-label">USDC</span>
-                <strong>{formatUsdFromBigInt(data.balanceUsdc)}</strong>
-              </div>
-            </div>
-          </article>
-
-          <article className="liquid-panel liquid-panel-soft">
-            <p className="eyebrow">Controllers</p>
-            <h4 className="display-text">Authorized bots</h4>
-
-            {controllers.length === 0 ? (
-              <p className="muted-copy">No controllers authorized yet.</p>
-            ) : (
-              <div className="list-items">
-                {controllers.map((controller) => (
-                  <div key={controller} className="list-item">
-                    <div>
-                      <strong className="list-primary">{shortAddr(controller)}</strong>
-                      <span className="list-secondary">Controller address</span>
-                    </div>
-                    {isOwner && walletClient ? (
-                      <button
-                        className="btn btn-danger"
-                        disabled={busy !== null}
-                        onClick={() =>
-                          exec("revoke-controller", () => writeVault("revokeController", [controller]))
-                        }
-                      >
-                        {busy === "revoke-controller" ? "Revoking..." : "Revoke"}
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {isOwner && walletClient ? (
-              <div className="stacked-form">
-                <label className="field-label" htmlFor="controller-address">
-                  Authorize a new controller
-                </label>
-                <div className="glass-input-row">
-                  <input
-                    id="controller-address"
-                    type="text"
-                    placeholder="0x... controller address"
-                    value={controllerInput}
-                    onChange={(event) => setControllerInput(event.target.value)}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    disabled={busy !== null}
-                    onClick={() => {
-                      exec("add-controller", () => writeVault("authorizeController", [controllerInput]));
-                      setControllerInput("");
-                    }}
-                  >
-                    {busy === "add-controller" ? "Adding..." : "Add"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </article>
-
-          <article className="liquid-panel liquid-panel-soft">
-            <p className="eyebrow">Allowlist</p>
-            <h4 className="display-text">Tradeable tokens</h4>
-
-            {allowedTokens.length === 0 ? (
-              <p className="muted-copy">No output tokens added to the allowlist yet.</p>
-            ) : (
-              <div className="list-items">
-                {allowedTokens.map((token) => (
-                  <div key={token} className="list-item">
-                    <div>
-                      <strong className="list-primary">{tokenLabel(token)}</strong>
-                      <span className="list-secondary">{shortAddr(token)}</span>
-                    </div>
-                    {isOwner && walletClient ? (
-                      <button
-                        className="btn btn-danger"
-                        disabled={busy !== null}
-                        onClick={() =>
-                          exec("remove-token", () => writeVault("removeAllowedToken", [token]))
-                        }
-                      >
-                        {busy === "remove-token" ? "Removing..." : "Remove"}
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {isOwner && walletClient ? (
-              <div className="stacked-form">
-                <label className="field-label" htmlFor="token-address">
-                  Add output token to allowlist
-                </label>
-                <div className="glass-input-row">
-                  <input
-                    id="token-address"
-                    type="text"
-                    placeholder="0x... token address"
-                    value={tokenInput}
-                    onChange={(event) => setTokenInput(event.target.value)}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    disabled={busy !== null}
-                    onClick={() => {
-                      exec("add-token", () => writeVault("addAllowedToken", [tokenInput]));
-                      setTokenInput("");
-                    }}
-                  >
-                    {busy === "add-token" ? "Adding..." : "Add"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </article>
-
-          {isOwner && walletClient ? (
-            <article className="liquid-panel liquid-panel-soft">
-              <p className="eyebrow">Emergency controls</p>
-              <h4 className="display-text">Pause operator execution</h4>
-              <p className="muted-copy">
-                This switch immediately pauses or resumes delegated execution at the vault level.
-              </p>
-              <button
-                className={`btn ${data.paused ? "btn-primary" : "btn-danger"} btn-wide`}
-                disabled={busy !== null}
-                onClick={() =>
-                  exec("pause-toggle", () => writeVault(data.paused ? "unpause" : "pause", []))
-                }
-              >
-                {busy === "pause-toggle"
-                  ? "Submitting..."
-                  : data.paused
-                    ? "Unpause Vault"
-                    : "Pause Vault"}
-              </button>
-            </article>
-          ) : null}
-        </div>
-      </section>
 
       {depositOpen ? (
         <div className="modal-backdrop" onClick={() => (busy === "deposit" ? null : setDepositOpen(false))}>
