@@ -7,6 +7,7 @@ interface IExecutionRegistry {
         address vault;
         address controller;
         address operator;
+        address adapter;
         bytes32 paymentRef;
         address tokenIn;
         address tokenOut;

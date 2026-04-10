@@ -4,13 +4,15 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {OperatorVault} from "../src/OperatorVault.sol";
 import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
+import {OkxAggregatorSwapAdapter} from "../src/OkxAggregatorSwapAdapter.sol";
 
 contract Deploy is Script {
     function run() external {
         address owner = vm.envAddress("VAULT_OWNER");
         address baseToken = vm.envAddress("BASE_TOKEN");
         address operator = vm.envAddress("OPERATOR_ADDRESS");
-        address trustedRouter = vm.envAddress("TRUSTED_ROUTER");
+        address router = vm.envAddress("TRUSTED_ROUTER");
+        address approvalTarget = vm.envOr("APPROVAL_TARGET", router);
         address controller = vm.envAddress("CONTROLLER_ADDRESS");
         address tokenOut = vm.envAddress("TOKEN_OUT");
         uint256 maxPerTrade = vm.envUint("MAX_PER_TRADE");
@@ -23,12 +25,14 @@ contract Deploy is Script {
         ExecutionRegistry registry = new ExecutionRegistry();
         console.log("ExecutionRegistry:", address(registry));
 
+        OkxAggregatorSwapAdapter adapter = new OkxAggregatorSwapAdapter(router, approvalTarget);
+        console.log("OkxAggregatorSwapAdapter:", address(adapter));
+
         OperatorVault vault = new OperatorVault(
             owner,
             baseToken,
             operator,
-            trustedRouter,
-            address(0),
+            address(adapter),
             maxPerTrade,
             maxDailyVolume,
             maxSlippageBps,
@@ -41,6 +45,7 @@ contract Deploy is Script {
 
         vault.authorizeController(controller);
         vault.addAllowedToken(tokenOut);
+        vault.allowPair(baseToken, tokenOut);
 
         console.log("Controller authorized:", controller);
         console.log("Base token:", baseToken);

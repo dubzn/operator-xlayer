@@ -6,21 +6,22 @@ import type {
   ExecuteRequest,
   ExecutionPreview,
   PaymentChallenge,
+  PreviewRequest,
+  RoutePreferences,
 } from "@x402-operator/shared";
 
-// --- Config ---
 const OPERATOR_URL = process.env.OPERATOR_URL || "http://localhost:3000";
 const CONTROLLER_PRIVATE_KEY = process.env.CONTROLLER_PRIVATE_KEY!;
 const VAULT_ADDRESS = process.env.VAULT_ADDRESS!;
+const SWAP_ADAPTER_ADDRESS = process.env.SWAP_ADAPTER_ADDRESS!;
 const TOKEN_IN = process.env.TOKEN_IN!;
 const TOKEN_OUT = process.env.TOKEN_OUT!;
 const FEE_TOKEN = process.env.FEE_TOKEN!;
 const RPC_URL = process.env.RPC_URL!;
 const SWAP_AMOUNT = process.env.SWAP_AMOUNT || "1000000";
 const INTERVAL_MS = parseInt(process.env.INTERVAL_MS || "30000");
-const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS || "0"); // 0 = infinite
+const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS || "0");
 
-// --- Helpers ---
 function log(msg: string) {
   const ts = new Date().toISOString().slice(11, 19);
   console.log(`[${ts}] ${msg}`);
@@ -28,6 +29,23 @@ function log(msg: string) {
 
 function formatAmount(raw: string, decimals = 6): string {
   return (Number(raw) / 10 ** decimals).toFixed(decimals > 6 ? 8 : 2);
+}
+
+function parseRoutePreferences(): RoutePreferences | undefined {
+  const toList = (value: string | undefined) =>
+    value?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+
+  const dexIds = toList(process.env.OKX_DEX_IDS);
+  const excludeDexIds = toList(process.env.OKX_EXCLUDE_DEX_IDS);
+
+  if (dexIds.length === 0 && excludeDexIds.length === 0) {
+    return undefined;
+  }
+
+  return {
+    ...(dexIds.length > 0 ? { dexIds } : {}),
+    ...(excludeDexIds.length > 0 ? { excludeDexIds } : {}),
+  };
 }
 
 async function apiCall<T>(
@@ -44,29 +62,36 @@ async function apiCall<T>(
   return { status: res.status, data };
 }
 
-// --- Core flow ---
 async function executeSwapCycle(
   wallet: ethers.Wallet,
   nonce: number
 ): Promise<boolean> {
   const controller = wallet.address;
 
-  // 1. Build intent
-  const intent: ExecutionIntent = {
+  const draftIntent: ExecutionIntent = {
     vaultAddress: VAULT_ADDRESS,
     controller,
+    adapter: SWAP_ADAPTER_ADDRESS,
     tokenIn: TOKEN_IN,
     tokenOut: TOKEN_OUT,
-    amount: SWAP_AMOUNT,
-    maxSlippageBps: 500,
+    amountIn: SWAP_AMOUNT,
+    quotedAmountOut: "0",
+    minAmountOut: "0",
     nonce,
     deadline: Math.floor(Date.now() / 1000) + 300,
+    executionHash: ethers.ZeroHash,
   };
 
-  log(`Intent: swap ${formatAmount(SWAP_AMOUNT)} ${TOKEN_IN.slice(0, 8)}... → ${TOKEN_OUT.slice(0, 8)}...`);
+  log(
+    `Intent draft: swap ${formatAmount(SWAP_AMOUNT)} ${TOKEN_IN.slice(0, 8)}... -> ${TOKEN_OUT.slice(0, 8)}...`
+  );
 
-  // 2. Preview — check if the swap is viable
-  const preview = await apiCall<ExecutionPreview>("/preview", "POST", { intent });
+  const routePreferences = parseRoutePreferences();
+  const previewBody: PreviewRequest = {
+    intent: draftIntent,
+    ...(routePreferences ? { routePreferences } : {}),
+  };
+  const preview = await apiCall<ExecutionPreview>("/preview", "POST", previewBody);
 
   if (preview.status !== 200) {
     log(`Preview failed (${preview.status}): ${JSON.stringify(preview.data)}`);
@@ -75,27 +100,35 @@ async function executeSwapCycle(
 
   const p = preview.data;
   const blockers = p.riskFlags.filter(
-    (f) => !f.includes("route-not-ready") && !f.includes("quote-missing")
+    (flag) => !flag.includes("route-not-ready") && !flag.includes("quote-missing")
   );
 
   if (blockers.length > 0) {
     log(`Preview blockers: ${blockers.join(", ")}`);
-    for (const w of p.warnings) log(`  ⚠ ${w}`);
+    for (const warning of p.warnings) log(`  Warning: ${warning}`);
     return false;
   }
 
-  if (!p.quotedRoute.hasRouteData) {
-    log("No route data available — skipping");
+  if (!p.quotedRoute.hasRouteData || p.quotedRoute.executionHash === ethers.ZeroHash) {
+    log("No executable route data available — skipping");
     return false;
   }
 
-  log(`Preview OK — expected out: ${formatAmount(p.quotedRoute.expectedOut)}, fee: ${formatAmount(p.estimatedFee.amount)}`);
+  const intent: ExecutionIntent = {
+    ...draftIntent,
+    adapter: p.quotedRoute.adapterAddress,
+    quotedAmountOut: p.quotedRoute.expectedOut,
+    minAmountOut: p.quotedRoute.minAmountOut,
+    executionHash: p.quotedRoute.executionHash,
+  };
 
-  // 3. Sign EIP-712 intent
+  log(
+    `Preview OK — expected out: ${formatAmount(p.quotedRoute.expectedOut, 18)}, min out: ${formatAmount(p.quotedRoute.minAmountOut, 18)}, fee: ${formatAmount(p.estimatedFee.amount)}`
+  );
+
   const signature = await signIntent(wallet, intent);
   log(`Signed intent (nonce=${nonce})`);
 
-  // 4. First execute call — expect 402
   const firstCall = await apiCall<PaymentChallenge>("/execute", "POST", {
     intent,
     signature,
@@ -114,7 +147,6 @@ async function executeSwapCycle(
   const challenge = firstCall.data;
   log(`Got 402 — fee: ${formatAmount(challenge.fee)} to ${challenge.paymentAddress.slice(0, 10)}...`);
 
-  // 5. Pay the fee
   const feeContract = new ethers.Contract(
     challenge.token,
     ["function transfer(address to, uint256 amount) returns (bool)"],
@@ -127,7 +159,6 @@ async function executeSwapCycle(
   const paymentReference = payReceipt.hash;
   log(`Fee paid: ${paymentReference}`);
 
-  // 6. Execute with payment proof
   log("Executing swap...");
   const execCall = await apiCall<{ status: string; jobId: string; txHash: string }>(
     "/execute",
@@ -146,7 +177,6 @@ async function executeSwapCycle(
   return true;
 }
 
-// --- Main loop ---
 async function main() {
   console.log("\n========================================");
   console.log("  X402 Operator — Trading Agent");
@@ -157,11 +187,11 @@ async function main() {
 
   log(`Controller: ${wallet.address}`);
   log(`Vault:      ${VAULT_ADDRESS}`);
+  log(`Adapter:    ${SWAP_ADAPTER_ADDRESS}`);
   log(`Swap:       ${formatAmount(SWAP_AMOUNT)} per round`);
   log(`Interval:   ${INTERVAL_MS / 1000}s`);
   log(`Max rounds: ${MAX_ROUNDS || "unlimited"}\n`);
 
-  // Check balances
   const feeContract = new ethers.Contract(
     FEE_TOKEN,
     ["function balanceOf(address) view returns (uint256)"],
@@ -191,13 +221,11 @@ async function main() {
     log(`Score: ${successes} success / ${failures} failed\n`);
   };
 
-  // Single-shot mode
   if (MAX_ROUNDS === 1) {
     await runRound();
     return;
   }
 
-  // Loop mode
   await runRound();
 
   const interval = setInterval(async () => {
@@ -209,7 +237,6 @@ async function main() {
     await runRound();
   }, INTERVAL_MS);
 
-  // Graceful shutdown
   process.on("SIGINT", () => {
     log("\nShutting down...");
     clearInterval(interval);

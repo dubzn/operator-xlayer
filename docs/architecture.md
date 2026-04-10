@@ -2,313 +2,315 @@
 
 ## Overview
 
-X402 Operator is an autonomous swap execution system on X Layer. Vault owners deposit capital and set risk policies; trading bots sign off-chain intents; an operator backend validates, charges a fee (x402 protocol), and executes the swap on-chain through the vault contract.
+X402 Operator is a delegated swap execution system on X Layer.
+
+The owner keeps capital in a vault. A controller agent asks for a swap. The operator backend previews the route, charges via `x402`, and submits execution. The vault is the hard trust boundary: it re-validates the signed intent, enforces policy, and records the receipt.
+
+Today the product is intentionally `swap-v2`, not universal DeFi automation.
 
 ## Actors
 
-| Actor | Role | Executes on-chain? |
-|-------|------|--------------------|
-| **Vault Owner** | Deploys vault, deposits capital, sets policy, authorizes controllers | Yes (admin txs) |
-| **Trading Bot (Controller)** | Signs EIP-712 intents expressing swap decisions | Only the fee payment |
-| **Operator (Backend)** | Validates intents, verifies payment, executes swaps through the vault | Yes (executeSwap) |
-| **Contracts** | Enforce policy, custody funds, record receipts | — |
+| Actor | Role | Onchain actions |
+|---|---|---|
+| **Vault Owner** | Deposits capital, configures policy, authorizes controllers | Yes |
+| **Controller Agent** | Requests swaps and signs EIP-712 intents | Fee payment only |
+| **Operator Backend** | Previews, validates, charges `x402`, and calls `executeSwap` | Yes |
+| **Vault / Registry** | Enforce policy, custody funds, store receipts | Native contracts |
 
-## Contracts
+## Contract system
 
 ### OperatorVault
 
-The vault is the user's on-chain safe. It holds ERC-20 tokens and enforces a risk policy on every swap.
+The vault is the custody and policy primitive. It holds ERC-20 balances and decides whether a delegated swap is allowed.
 
-**Owner-only functions:**
+**Current state surface**
 
-- `deposit(token, amount)` — Transfer tokens into the vault
-- `withdraw(token, amount, to)` — Transfer tokens out
-- `authorizeController(address)` / `revokeController(address)` — Manage which bots can request swaps
-- `addAllowedToken(token)` / `removeAllowedToken(token)` — Manage output token allowlist
-- `updatePolicy(maxPerTrade, maxDailyVolume, maxSlippage, cooldown)` — Adjust risk parameters
-- `pause()` / `unpause()` — Emergency stop
+- `owner`
+- `baseToken`
+- `authorizedOperator`
+- `authorizedControllers`
+- `allowedInputTokens`
+- `allowedTokens` (output allowlist)
+- `allowedPairs[tokenIn][tokenOut]`
+- `allowedSwapAdapters`
+- `usedNonces`
+- `maxAmountPerTrade`
+- `maxDailyVolume`
+- `maxSlippageBps`
+- `cooldownSeconds`
+- `paused`
+- `currentDay`, `dailyVolumeUsed`, `lastExecution`
 
-**Operator-only function:**
+**Owner functions**
 
-- `executeSwap(intent, routeData, signature, paymentRef, registry, minAmountOut)` — Execute a validated swap
+- `deposit(token, amount)`
+- `withdraw(token, amount, to)`
+- `authorizeController(controller)` / `revokeController(controller)`
+- `addAllowedInputToken(token)` / `removeAllowedInputToken(token)`
+- `addAllowedToken(token)` / `removeAllowedToken(token)`
+- `allowPair(tokenIn, tokenOut)` / `revokePair(tokenIn, tokenOut)`
+- `allowSwapAdapter(adapter)` / `revokeSwapAdapter(adapter)`
+- `updatePolicy(maxAmountPerTrade, maxDailyVolume, maxSlippageBps, cooldownSeconds)`
+- `pause()` / `unpause()`
 
-Even though only the operator can call `executeSwap`, the contract independently re-validates everything:
+**Operator function**
 
-1. Recover the EIP-712 signer and verify it matches `intent.controller`
-2. Check that the recovered controller is authorized
-3. Check nonce has not been used (then mark it used)
-4. Check deadline has not passed
-5. Check `tokenIn == baseToken` and `tokenOut` is in the allowlist
-6. Check amount does not exceed `maxAmountPerTrade`
-7. Check daily volume cap (UTC day bucket)
-8. Check cooldown period since last execution
-9. Approve the trusted router and call it with `routeData`
-10. Measure `balanceAfter - balanceBefore` for the output token
-11. Check slippage: `amountOut >= minAmountOut`
-12. Update volume and cooldown tracking
-13. Emit `ExecutionSucceeded` and record a receipt in the registry
+- `executeSwap(intent, executionData, signature, paymentRef, registry)`
+
+### What `executeSwap` enforces onchain
+
+The vault independently re-validates the full execution request:
+
+1. vault is not paused
+2. `intent.vaultAddress == address(this)`
+3. selected adapter is allowlisted
+4. recovered signer matches `intent.controller`
+5. recovered controller is authorized
+6. nonce has not been used
+7. deadline has not expired
+8. `tokenIn` is allowlisted
+9. `tokenOut` is allowlisted
+10. `tokenIn -> tokenOut` pair is allowlisted
+11. `amountIn <= maxAmountPerTrade`
+12. daily volume cap is respected
+13. cooldown has elapsed
+14. `keccak256(executionData) == intent.executionHash`
+15. `intent.minAmountOut` is not weaker than the vault policy floor derived from `quotedAmountOut`
+16. adapter execution succeeds
+17. realized `amountOut >= intent.minAmountOut`
+
+Only after that does the vault emit `ExecutionSucceeded` and record a receipt.
+
+### OkxAggregatorSwapAdapter
+
+The vault is venue-flexible, but the first adapter is the OKX swap adapter.
+
+Responsibilities:
+
+- approve `tokenIn` for the OKX approval target
+- call the OKX router with the backend-provided calldata
+- measure `amountOut` as the change in `tokenOut` balance
+
+Why the adapter layer matters:
+
+- the vault is no longer hardwired to one router shape
+- the execution venue is explicitly part of policy
+- future adapters can be added without redesigning the vault surface
+
+The backend currently supports one configured adapter: the OKX adapter.
 
 ### ExecutionRegistry
 
-A public ledger of execution receipts.
+The registry is the onchain receipt ledger.
 
-- `recordReceipt(receipt)` — Only callable by authorized vaults. Stores the full receipt (jobId, vault, controller, operator, tokens, amounts, timestamp, success) and increments `successCount[operator]`.
-- `getReceipt(jobId)` — Retrieve a receipt by job ID.
-- `getTrackRecord(operator)` — Returns the number of successful executions for an operator (reputation score).
-- `authorizeFactory(factory)` — Allows a factory contract to register new vaults automatically.
+Each receipt stores:
+
+- `jobId`
+- `vault`
+- `controller`
+- `operator`
+- `adapter`
+- `paymentRef`
+- `tokenIn`
+- `tokenOut`
+- `amountIn`
+- `amountOut`
+- `timestamp`
+- `success`
+
+The registry also tracks a simple `successCount` per operator.
 
 ### VaultFactory
 
-Allows any user to deploy a vault from the frontend without writing code.
+The factory lets users create vaults from the UI without manual contract deployment.
 
-- `createVault(baseToken, maxPerTrade, maxDailyVolume, maxSlippage, cooldown)` — Deploys a new `OperatorVault`, auto-registers it in the `ExecutionRegistry`, and records the `owner → vault` mapping.
-- `getVaultsByOwner(owner)` — Returns all vaults created by an owner.
+Current constructor shape:
 
-### MockRouter (testnet only)
+- `registry`
+- `operator`
+- `defaultSwapAdapter`
 
-Simulates a DEX for testing. Receives `tokenIn`, returns `tokenOut` at 1:1 ratio. In production this is replaced by a real DEX router (e.g. OKX DEX).
+`createVault(...)` deploys a new `OperatorVault`, auto-registers it in the registry, and tracks the vault under the owner address.
 
-## EIP-712 Typed Signatures
+## EIP-712 intent model
 
-The bot never submits transactions to the vault directly. Instead, it signs a typed `ExecutionIntent`:
+The current typed intent is:
 
-```
+```text
 ExecutionIntent {
-  vaultAddress:   address  // which vault to execute on
-  controller:     address  // the bot's address (signer)
-  tokenIn:        address  // input token (must match vault's baseToken)
-  tokenOut:       address  // output token (must be in vault's allowlist)
-  amount:         uint256  // amount of tokenIn to swap
-  maxSlippageBps: uint256  // max slippage the bot accepts (basis points)
-  nonce:          uint256  // anti-replay nonce
-  deadline:       uint256  // unix timestamp expiry
+  vaultAddress:    address
+  controller:      address
+  adapter:         address
+  tokenIn:         address
+  tokenOut:        address
+  amountIn:        uint256
+  quotedAmountOut: uint256
+  minAmountOut:    uint256
+  nonce:           uint256
+  deadline:        uint256
+  executionHash:   bytes32
 }
 ```
 
 Domain:
 
-```
+```text
 {
   name: "X402Operator",
-  version: "1",
+  version: "2",
   chainId: <chain ID>,
   verifyingContract: <vault address>
 }
 ```
 
-The contract recovers the signer with `ECDSA.recover` on the EIP-712 digest and verifies it matches an authorized controller. This separates **who decides** (the bot) from **who executes** (the operator).
+### Why `executionHash` matters
 
-## The x402 Payment Protocol
+The controller is no longer signing only generic swap bounds. It signs:
 
-Inspired by HTTP 402 (Payment Required). The operator charges a fee for execution gas and service.
+- the selected adapter
+- the quote-derived output expectation
+- the minimum acceptable output
+- a hash of the exact calldata that the operator will submit
 
-### Step-by-step
+That gives the system a stronger binding between preview and execution without forcing the controller to reason about the full router payload directly.
 
-**1. Free pre-validation** — The bot calls `POST /preview` with the intent. The backend reads the vault's on-chain policy, gets a swap quote, and returns a preview with risk flags, warnings, expected output, and the fee. No payment needed.
+## API flow
 
-**2. First execute call (no payment)** — The bot calls `POST /execute` with `{intent, signature}` but no `paymentReference`. The backend validates the intent fully off-chain. If valid but unpaid, it responds **HTTP 402**:
+### `POST /preview`
 
-```json
-{
-  "fee": "100000",
-  "token": "0x9e29...FB0c",
-  "paymentAddress": "0xF88A...570b",
-  "message": "Payment required. Transfer the fee and re-submit with paymentReference."
-}
-```
+Purpose:
 
-**3. Bot pays the fee** — The bot sends an ERC-20 `transfer()` on-chain from itself to the operator's address for the required fee amount.
+- read the current vault policy snapshot
+- fetch a route from OKX DEX
+- derive policy warnings before charging
+- return a quote package the controller can sign
 
-**4. Re-submit with proof** — The bot calls `POST /execute` again, now including `paymentReference` (the tx hash of the fee transfer). The backend:
+What happens:
 
-- Fetches the transaction receipt on-chain
-- Verifies there is a `Transfer` event where `from == controller`, `to == operator`, `amount >= fee`, and the token matches
-- Checks the payment reference has not been used before (replay protection via persistent ledger)
-- If valid, proceeds with execution
+1. backend reads vault policy and state
+2. backend resolves optional `dexIds` / `excludeDexIds`
+3. backend requests a quote from OKX DEX
+4. backend computes:
+   - `expectedOut`
+   - `policyMinAmountOut`
+   - `executionHash = keccak256(routeData)`
+   - `expiresAt`
+5. backend caches the quote by `executionHash`
+6. backend returns:
+   - fee estimate
+   - routed adapter and router info
+   - risk flags and warnings
+   - policy check summary
+   - route preferences applied
 
-**5. Execution** — The backend calls `vault.executeSwap()` on-chain. On success, returns `{jobId, txHash}` to the bot.
+The controller should treat the preview as the source of truth for the final values it signs.
 
-### Why this matters
+### `POST /execute`
 
-- The vault owner never pays gas for swaps
-- The bot pays a small fee; the operator pays the `executeSwap` gas and recovers cost through the fee
-- The vault only gains or loses based on swap outcomes, bounded by its policy
+Purpose:
 
-## Backend Services
+- enforce payment
+- validate the signed request against the cached quote and live vault state
+- submit the onchain execution
 
-### Route: POST /preview
+What happens:
 
-1. Reads the vault's full policy snapshot from on-chain (13 parallel `view` calls)
-2. Gets a swap quote from OnchainOS (or MockRouter on testnet)
-3. Builds a `PolicyCheckSummary` checking all 8 policy constraints
-4. Returns risk flags, warnings, fee info, and quoted route
+1. backend loads the cached quote by `intent.executionHash`
+2. backend checks:
+   - quote exists and is not expired
+   - cached adapter matches `intent.adapter`
+   - cached `expectedOut` matches `intent.quotedAmountOut`
+   - `intent.minAmountOut` is not below the cached policy floor
+3. backend validates the EIP-712 signature and live vault state
+4. if unpaid, backend returns HTTP `402`
+5. if paid, backend verifies the payment transfer onchain
+6. backend calls `vault.executeSwap(...)`
+7. backend returns `jobId` and tx hash
 
-### Route: POST /execute
+### `GET /receipts/:jobId`
 
-1. **Validate intent off-chain** — Recover EIP-712 signer, check all policy constraints against on-chain state. This saves gas: if the intent would revert on-chain, reject it here without spending gas.
-2. **Verify payment** (x402) — If no `paymentReference`, return 402. If provided, verify the on-chain transfer and check the ledger for replay.
-3. **Execute** — Call `vault.executeSwap()` via the operator wallet. Parse the `ExecutionSucceeded` event for `amountOut`.
-4. **Return** `{jobId, txHash, amountOut}`
+Returns the receipt recorded in the `ExecutionRegistry`.
 
-### Route: GET /receipts/:jobId
+### `GET /operator/track-record`
 
-Reads a receipt from the `ExecutionRegistry` contract.
+Returns the current operator success count from the registry.
 
-### Route: GET /operator/track-record
+## x402 payment model
 
-Returns the operator's `successCount` from the registry.
+The fee and the vault capital are intentionally separated.
 
-### Service: Intent Validator
+- the controller pays the operator
+- the operator pays gas for `executeSwap`
+- the vault capital is only exposed to the result of the swap itself
 
-Reads a full policy snapshot from the vault in one batch (13 parallel calls):
+This matters because the caller can be:
 
-- `authorizedControllers(controller)`
-- `usedNonces(nonce)`
-- `allowedTokens(tokenOut)`
-- `baseToken()`, `maxAmountPerTrade()`, `maxDailyVolume()`, `maxSlippageBps()`
-- `currentDay()`, `dailyVolumeUsed()`, `lastExecution()`, `cooldownSeconds()`
-- `paused()`, `trustedRouter()`
+- the owner's own bot
+- a third-party agent
+- a marketplace task runner
 
-Then evaluates the same 8 checks the contract would enforce. This is a gas-saving filter — if any check fails, the backend rejects the request without sending a transaction.
+`x402` is the pricing rail between the controller and the operator service.
 
-### Service: OKX DEX / Quote Provider
+## Quote source
 
-Responsible for generating `routeData` (the calldata the vault forwards to the router).
+The backend uses the OKX DEX Aggregator API for live swap routing.
 
-- **Testnet mode** (`USE_MOCK_ROUTER=true`): Encodes `MockRouter.swap(tokenIn, tokenOut, amountIn, amountOut)` calldata with a 1% spread.
-- **Production mode** (`USE_MOCK_ROUTER=false`): Calls the OKX DEX Aggregator API v6 (`GET /api/v6/dex/aggregator/swap`) with HMAC-SHA256 authentication. Returns real swap calldata and router address for X Layer mainnet. Requires `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, and `OKX_PROJECT_ID` environment variables.
+Current behavior:
 
-### Service: On-chain Executor
+- fetch swap calldata from OKX
+- optionally constrain routing with `OKX_DEX_IDS`
+- optionally exclude venues with `OKX_EXCLUDE_DEX_IDS`
+- cache the route keyed by `executionHash`
 
-1. Gets a swap quote
-2. Validates the router matches `vault.trustedRouter()`
-3. Computes `jobId = keccak256(intentHash, paymentRef)`
-4. Calculates `minAmountOut` using the effective slippage (min of policy and intent)
-5. Sends `vault.executeSwap()` and waits for the receipt
-6. Parses the `ExecutionSucceeded` event for `amountOut`
+Important boundary:
 
-### Service: Payment Ledger
+- OKX provides routing
+- X402 Operator provides custody separation, authorization, quote binding, and policy enforcement
 
-A persistent `Set<string>` backed by `payment-ledger.json`. Each payment reference (tx hash) can only be consumed once. Prevents replay attacks where a bot submits the same fee payment for multiple executions.
+## Agent flow
 
-### Service: Event Indexer
+The reference agent in `packages/agent` runs this loop:
 
-Polls the chain every 5 seconds for vault events:
+1. build a draft intent with placeholder quote values
+2. call `POST /preview`
+3. copy `expectedOut`, `minAmountOut`, and `executionHash` into the final intent
+4. sign the final intent
+5. call `POST /execute`
+6. pay the `402` fee
+7. re-submit with `paymentReference`
 
-- Starts from the current block on first run (only indexes new events going forward)
-- Respects X Layer's 100-block `getLogs` limit by chunking requests
-- Parses 7 event types: `ExecutionSucceeded`, `Deposit`, `Withdraw`, `ControllerAuthorized`, `ControllerRevoked`, `Paused`, `Unpaused`
-- Fetches block timestamps for each event
-- Deduplicates by `txHash + eventType`
-- Persists to `vault-events.json` with `lastBlock` cursor for restart resilience
-- Serves events via `GET /events/:vaultAddress`
+This is important for the pitch because it shows that the controller signs the **final** execution bounds, not just a vague trade request.
 
-## Trading Agent
+## Frontend status
 
-The autonomous trading bot (`packages/agent/src/run.ts`) executes the full x402 flow in a configurable loop:
+The frontend is already useful for vault creation, monitoring, deposits, controller management, and history.
 
-1. Build an `ExecutionIntent` with the configured swap parameters
-2. Call `POST /preview` to check viability (policy checks, quote availability, risk flags)
-3. Sign the intent with EIP-712
-4. Call `POST /execute` without payment — receive the 402 challenge
-5. Pay the operator fee via ERC-20 transfer on-chain
-6. Re-call `POST /execute` with the `paymentReference` (fee tx hash)
-7. Log the result and wait for the next interval
+The newest `swap-v2` admin surfaces live first in contracts and API:
 
-Configuration via environment variables:
-- `SWAP_AMOUNT` — amount per round
-- `INTERVAL_MS` — milliseconds between rounds (default 30s)
-- `MAX_ROUNDS` — 0 for unlimited, 1 for single-shot
+- input token allowlists
+- pair allowlists
+- adapter allowlists
 
-## Frontend
+Those can be added to the UI next without changing the contract model again.
 
-React app with viem for blockchain interaction.
-
-- **Wallet connection** — Direct `window.ethereum` provider, no wagmi dependency
-- **Vault selector** — Lists vaults from `VaultFactory.getVaultsByOwner()` or manual address input
-- **Create vault** — Calls `VaultFactory.createVault()` with user-defined policy
-- **Dashboard** — Shows balances (USDT/USDC), policy parameters, daily volume usage
-- **Owner actions** — Deposit, authorize/revoke controllers, add tokens, pause/unpause, update policy
-- **History** — Fetches indexed events from backend, displays in a table with event badges, token names, controller addresses, and explorer links. Polls every 10 seconds.
-
-## Security Model
+## Security model
 
 | Risk | Mitigation |
-|------|------------|
-| Operator steals funds | Can only swap to allowlisted tokens, bounded by per-trade and daily volume limits, with slippage protection |
-| Bot sends bad intent | On-chain policy enforcement rejects it (all 8 checks re-run in the contract) |
-| Intent replay | Nonce is marked as used on-chain; cannot be reused |
-| Payment replay | Payment ledger rejects already-consumed references |
-| Operator charges but doesn't execute | Bot can verify execution via receipt in the ExecutionRegistry |
-| Emergency | Owner calls `pause()` to block all execution immediately |
-| Off-chain validation bypass | Irrelevant — the contract re-validates everything independently |
+|---|---|
+| Operator tries to change the route after preview | `executionHash` is signed and re-checked onchain |
+| Operator tries a disallowed venue | adapter must be allowlisted in the vault |
+| Controller is compromised | controller is still constrained by token, pair, amount, slippage, daily volume, and cooldown policy |
+| Backend validation is bypassed | irrelevant for custody; the vault re-validates everything onchain |
+| Payment replay | payment references are consumed once |
+| Intent replay | nonces are consumed onchain |
+| Emergency | owner can pause or revoke controllers immediately |
 
-## Execution Flow Diagram
+## Product boundary today
 
-```
-Bot                      Operator Backend                Vault Contract          Registry
- │                            │                              │                      │
- │  POST /preview {intent}    │                              │                      │
- │───────────────────────────>│  read policy + get quote     │                      │
- │                            │─────────────────────────────>│                      │
- │  {fee, riskFlags, quote}   │                              │                      │
- │<───────────────────────────│                              │                      │
- │                            │                              │                      │
- │  ERC20.transfer(fee) ──────────────────────────────────────────────────> chain   │
- │                            │                              │                      │
- │  POST /execute             │                              │                      │
- │  {intent, sig, paymentRef} │                              │                      │
- │───────────────────────────>│                              │                      │
- │                            │  1. validate intent offchain │                      │
- │                            │  2. verify payment onchain   │                      │
- │                            │  3. consume payment ref      │                      │
- │                            │  4. vault.executeSwap()      │                      │
- │                            │─────────────────────────────>│                      │
- │                            │                              │  re-validate all     │
- │                            │                              │  approve router      │
- │                            │                              │  router.call()       │
- │                            │                              │  check slippage      │
- │                            │                              │  record receipt ────>│
- │                            │                              │                      │
- │                            │  ExecutionSucceeded event    │                      │
- │                            │<─────────────────────────────│                      │
- │  {jobId, txHash}           │                              │                      │
- │<───────────────────────────│                              │                      │
-```
+The strongest honest framing is:
 
-## Deployed Contracts (X Layer Testnet)
+- **today:** secure delegated swap execution
+- **next:** more swap venues or richer execution adapters
+- **later:** protocol-specific actions such as LP, lending, or staking
 
-| Contract | Address |
-|----------|---------|
-| ExecutionRegistry | `0x3d77c98D4E0f150Fd28D3A12708fd0300076ce97` |
-| VaultFactory | `0xdA3f23F937d530120F1DeAcBDA08770b1CF99CA7` |
-| MockRouter | `0x54Bf470359EaE4A9BEe20F587Df9dc20C333e25F` |
-| Test Vault | `0x6C50552803c7f2E26ff3452cB768FA4A8d7969Cb` |
-| USDT | `0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c` |
-| USDC | `0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D` |
-
-## Mainnet Deployment (X Layer — chain 196)
-
-For production, the system uses the OKX DEX Aggregator router instead of MockRouter.
-
-| Component | Address |
-|-----------|---------|
-| OKX DEX Router | `0xbec6d0E341102732e4FD62EC50E2F0a9D1bd1D33` |
-| OKX Token Approval | `0x8b773D83bc66Be128c60e07E17C8901f7a64F000` |
-
-Deploy with:
-```bash
-cd packages/contracts
-forge script script/DeployMainnet.s.sol --rpc-url https://rpc.xlayer.tech --broadcast --private-key $PRIVATE_KEY
-```
-
-Backend configuration for mainnet:
-```
-CHAIN_ID=196
-RPC_URL=https://rpc.xlayer.tech
-USE_MOCK_ROUTER=false
-OKX_API_KEY=<your key>
-OKX_SECRET_KEY=<your secret>
-OKX_PASSPHRASE=<your passphrase>
-OKX_PROJECT_ID=<your project id>
-```
+That is why the current implementation is credible: it solves one important thing well instead of pretending to solve every agent workflow at once.

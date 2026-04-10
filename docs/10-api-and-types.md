@@ -1,177 +1,264 @@
 # 10. API and Types
 
 ## API philosophy
-The backend contract with controller agents should be deterministic, typed, and small. The MVP must not rely on natural language parsing or fuzzy intent interpretation.
+
+The operator API should stay deterministic, typed, and small.
+
+The controller should be able to integrate with a typed client, not by prompting a backend with fuzzy instructions.
 
 ## Core endpoints
 
 ### `POST /preview`
+
 Purpose:
-- optional preflight response before execution
-- may return quote, risk checks, and operator fee estimate
 
-Suggested request:
-- typed candidate execution payload
-- no signature required if preview remains informational only
+- build the signable execution package
+- run free preflight checks
+- return fee, quote, and risk context before payment
 
-Suggested response:
-- route summary
-- fee estimate
-- policy check summary
-- warnings
-- expiry timestamp
+Request:
+
+```json
+{
+  "intent": {
+    "vaultAddress": "0xVault",
+    "controller": "0xController",
+    "adapter": "0xOkxAdapter",
+    "tokenIn": "0xUSDT",
+    "tokenOut": "0xUSDC",
+    "amountIn": "800000000",
+    "quotedAmountOut": "0",
+    "minAmountOut": "0",
+    "nonce": 47,
+    "deadline": 1777777777,
+    "executionHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "routePreferences": {
+    "dexIds": ["1", "4"]
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "jobClass": "swap-v2",
+  "vaultAddress": "0xVault",
+  "estimatedFee": {
+    "amount": "1000000",
+    "token": "0xUSDT"
+  },
+  "quotedRoute": {
+    "adapterAddress": "0xOkxAdapter",
+    "routerAddress": "0xRouter",
+    "hasRouteData": true,
+    "expectedOut": "798500000",
+    "minAmountOut": "790515000",
+    "executionHash": "0xabc123..."
+  },
+  "riskFlags": [],
+  "warnings": [],
+  "routePreferencesApplied": {
+    "dexIds": ["1", "4"]
+  },
+  "policyCheckSummary": {
+    "controllerAuthorized": true,
+    "adapterAllowed": true,
+    "nonceAvailable": true,
+    "inputTokenAllowed": true,
+    "outputTokenAllowed": true,
+    "pairAllowed": true,
+    "amountWithinLimit": true,
+    "withinDailyVolume": true,
+    "cooldownMet": true,
+    "vaultNotPaused": true,
+    "policyMinAmountOut": "790515000"
+  },
+  "expiresAt": 1777777730
+}
+```
 
 ### `POST /execute`
+
 Purpose:
-- paid execution endpoint
-- `x402`-protected in MVP
 
-Suggested request:
-- `ExecutionIntent`
-- optional client metadata for observability
+- enforce `x402`
+- validate the signed intent against the cached quote and live vault state
+- submit `executeSwap(...)`
 
-Suggested response:
-- execution status
-- `jobId`
-- receipt reference
-- tx hash when available
+Request:
+
+```json
+{
+  "intent": {
+    "vaultAddress": "0xVault",
+    "controller": "0xController",
+    "adapter": "0xOkxAdapter",
+    "tokenIn": "0xUSDT",
+    "tokenOut": "0xUSDC",
+    "amountIn": "800000000",
+    "quotedAmountOut": "798500000",
+    "minAmountOut": "790515000",
+    "nonce": 47,
+    "deadline": 1777777777,
+    "executionHash": "0xabc123..."
+  },
+  "signature": "0xSignedTypedData",
+  "paymentReference": "0xFeeTxHash"
+}
+```
+
+Behavior:
+
+- if unpaid, return HTTP `402`
+- if paid and valid, return `status`, `jobId`, and `txHash`
 
 ### `GET /receipts/:jobId`
+
 Purpose:
-- fetch the public execution receipt and any associated metadata
+
+- fetch the public execution receipt from the registry
 
 ### `GET /operator/track-record`
+
 Purpose:
-- expose the simple operator execution history counters
+
+- expose the operator's current success counter
 
 ## Core types
 
 ### `ExecutionIntent`
-Minimum fields:
+
+Current fields:
+
 - `vaultAddress`
 - `controller`
+- `adapter`
 - `tokenIn`
 - `tokenOut`
-- `amount`
-- `maxSlippageBps`
+- `amountIn`
+- `quotedAmountOut`
+- `minAmountOut`
 - `nonce`
 - `deadline`
-- `signature`
+- `executionHash`
 
-Suggested note:
-- route data should not be blindly signed by the controller in MVP unless route stability is guaranteed; the controller signs the execution bounds, not every backend packaging detail
+Important note:
+
+- the signature is over the typed intent
+- the signature is **not** part of the intent itself
+- the controller signs the quote package returned by preview
+
+### `RoutePreferences`
+
+Optional fields:
+
+- `dexIds`
+- `excludeDexIds`
+
+These let the caller constrain or exclude venues inside the OKX Aggregator request.
 
 ### `ExecutionPreview`
-Suggested fields:
+
+Current fields:
+
 - `jobClass`
 - `vaultAddress`
 - `estimatedFee`
 - `quotedRoute`
-- `expectedOut`
 - `riskFlags`
+- `warnings`
+- `routePreferencesApplied`
 - `policyCheckSummary`
 - `expiresAt`
 
 ### `ExecutionReceipt`
-Suggested fields:
+
+Current fields:
+
 - `jobId`
 - `vaultAddress`
 - `controller`
 - `operator`
+- `adapter`
 - `paymentReference`
-- `executionTxHash`
-- `status`
 - `tokenIn`
 - `tokenOut`
 - `amountIn`
 - `amountOut`
-- `slippageBps`
 - `timestamp`
+- `status`
+
+### `ExecuteResponse`
+
+Current fields:
+
+- `status`
+- `jobId`
+- `txHash`
 
 ### `TrackRecord`
-Suggested fields:
-- `successCount`
-- `failCount`
-- `avgSlippageDeltaBps`
-- `policyViolationCount`
 
-In MVP, `failCount` and `policyViolationCount` are expected to be backend-derived analytics rather than native onchain registry counters.
+Current fields:
+
+- `operator`
+- `successCount`
+
+The onchain registry keeps the reputation surface intentionally simple for now.
 
 ## Canonical identifiers
-- `vaultAddress` is the canonical identifier of a vault in MVP
-- `intentHash` is the canonical identifier of the signed execution request
+
+- `vaultAddress` is the canonical vault identifier
+- `intentHash` is the canonical identifier of the signed request
+- `executionHash` is the hash of the exact cached `executionData`
 - `jobId = keccak256(intentHash, paymentReference)` is the canonical identifier of a paid execution attempt
 
-Because MVP excludes a factory, there is no separate numeric vault ID that needs to be preserved.
-
 ## Signed fields
-The controller signature should cover the typed fields that define the execution request:
+
+The controller signature covers:
+
 - vault address
 - controller address
+- adapter
 - token pair
 - amount
-- max slippage
+- quote-derived output bounds
 - nonce
 - deadline
+- `executionHash`
 
-The signature must not be over a vague or partially backend-generated blob.
+This is stronger than signing only a loose swap request because the final signature is bound to the exact route package approved by preview.
 
 ## Signature standard
-MVP should use **EIP-712 typed data** with this domain:
+
+The current implementation uses EIP-712 with:
+
 - `name = "X402Operator"`
-- `version = "1"`
-- `chainId = 196`
+- `version = "2"`
+- `chainId = 196` by default
 - `verifyingContract = vaultAddress`
 
-The backend and the vault must verify the same digest. MVP should assume an EOA controller path first.
+The backend and the vault verify the same typed data digest.
 
 ## Replay protections
-The MVP requires both:
+
+The current system uses:
+
 - `nonce`
 - `deadline`
+- one-time payment references
+- cached quote expiry
 
-A nonce stops exact replay. A deadline limits the lifetime of a valid intent.
+These protect against replay across the signature layer, payment layer, and route layer.
 
 ## Determinism rule
-All payloads in MVP should be deterministic and typed. There should be no endpoint that accepts fuzzy instructions like:
-- "rebalance me into safety"
-- "do what the market suggests"
 
-Those can be layered on later by a higher-level controller agent, but not by the core operator service.
+All payloads should remain deterministic and typed.
 
-## Example `ExecutionIntent`
-```json
-{
-  "vaultAddress": "0xVault",
-  "controller": "0xController",
-  "tokenIn": "0xUSDT",
-  "tokenOut": "0xETH",
-  "amount": "800000000",
-  "maxSlippageBps": 200,
-  "nonce": 47,
-  "deadline": 1777777777,
-  "signature": "0x..."
-}
-```
+The operator must not accept fuzzy requests like:
 
-## Example `ExecutionReceipt`
-```json
-{
-  "jobId": "job_47",
-  "vaultAddress": "0xVault",
-  "controller": "0xController",
-  "operator": "0xOperator",
-  "paymentReference": "0xPayment",
-  "executionTxHash": "0xTxHash",
-  "status": "success",
-  "tokenIn": "0xUSDT",
-  "tokenOut": "0xETH",
-  "amountIn": "800000000",
-  "amountOut": "298000000000000000",
-  "slippageBps": 31,
-  "timestamp": 1777777788
-}
-```
+- "rebalance into safety"
+- "do whatever the market recommends"
 
-## Implementation rule of thumb
-If a controller agent cannot integrate against the API with a typed client in an afternoon, the API surface is too fuzzy for MVP.
+Those belong to higher-level controller logic, not the execution API.

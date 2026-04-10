@@ -5,6 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {OperatorVault} from "../src/OperatorVault.sol";
 import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
 import {VaultFactory} from "../src/VaultFactory.sol";
+import {OkxAggregatorSwapAdapter} from "../src/OkxAggregatorSwapAdapter.sol";
 
 contract DeployMainnet is Script {
     function run() external {
@@ -25,20 +26,26 @@ contract DeployMainnet is Script {
         ExecutionRegistry registry = new ExecutionRegistry();
         console.log("ExecutionRegistry:", address(registry));
 
-        // 2. Deploy VaultFactory with OKX DEX router as trusted router
+        // 2. Deploy OKX swap adapter
+        OkxAggregatorSwapAdapter okxAdapter = new OkxAggregatorSwapAdapter(
+            okxDexRouter,
+            okxApprovalTarget
+        );
+        console.log("OKX Swap Adapter:", address(okxAdapter));
+
+        // 3. Deploy VaultFactory with OKX adapter as default venue
         VaultFactory factory = new VaultFactory(
             address(registry),
             deployer,          // operator
-            okxDexRouter,      // trustedRouter = OKX DEX aggregation proxy
-            okxApprovalTarget  // OKX DEX token approval contract
+            address(okxAdapter)
         );
         console.log("VaultFactory:", address(factory));
 
-        // 3. Authorize factory in registry
+        // 4. Authorize factory in registry
         registry.authorizeFactory(address(factory));
         console.log("Factory authorized in registry");
 
-        // 4. Create initial vault via factory
+        // 5. Create initial vault via factory
         address vault = factory.createVault(
             usdt,             // baseToken
             50_000_000,       // maxPerTrade: 50 USDT
@@ -48,12 +55,14 @@ contract DeployMainnet is Script {
         );
         console.log("Vault (via factory):", vault);
 
-        // 5. Configure vault — allow USDC as output token
+        // 6. Configure vault — allow USDC as output token and USDT -> USDC pair
         OperatorVault(vault).addAllowedToken(usdc);
+        OperatorVault(vault).allowPair(usdt, usdc);
         OperatorVault(vault).authorizeController(deployer);
 
         console.log("--- Deployment Summary ---");
         console.log("Deployer/Operator:", deployer);
+        console.log("OKX Swap Adapter:", address(okxAdapter));
         console.log("OKX DEX Router:", okxDexRouter);
         console.log("USDT:", usdt);
         console.log("USDC:", usdc);

@@ -1,141 +1,158 @@
 # 06. Execution Flow
 
 ## Why this flow matters
-The flow is the heart of the product. If the team can implement this cleanly once, the project works. If the flow becomes fuzzy, the project collapses into a backend service with nice branding.
+
+The flow is the product. If the flow is crisp, the system is trustworthy. If the flow gets fuzzy, the project degrades into a backend service with a nice story.
 
 ## Setup flow
+
 The setup path happens once per vault.
 
-1. **Owner initializes the vault**
-   - The owner deploys or initializes the vault contract.
-   - The owner sets the initial policy values.
-   - The owner points the vault at the operator and registry.
+1. **Owner creates the vault**
+   - deploy directly or via factory
+   - set operator and default adapter through the factory path
 
 2. **Owner funds the vault**
-   - The owner deposits the strategy capital.
-   - This capital is separate from any operator fee.
+   - deposit strategy capital
+   - fee funding remains separate from vault capital
 
-3. **Owner authorizes the operator**
-   - The vault records which operator address can submit execution calls.
+3. **Owner configures policy**
+   - authorize controllers
+   - allow input tokens
+   - allow output tokens
+   - allow pairs
+   - allow swap adapters
+   - set max per trade, daily volume, slippage, cooldown
 
-4. **Owner authorizes the controller agent**
-   - The vault allowlists a controller address.
-   - The controller is now allowed to sign execution intents for this vault.
-
-5. **Owner inspects the starting state**
-   - confirm balances
-   - confirm policy values
-   - confirm controller and operator addresses
+4. **Owner inspects the initial state**
+   - balances
+   - controllers
+   - token and pair policy
+   - adapter policy
 
 ## Preview flow
-Preview is optional but useful.
 
-1. Controller constructs a candidate request.
-2. Controller calls `POST /preview`.
-3. Operator runs route, market, and security checks.
-4. Operator returns a deterministic preview with:
-   - estimated route
+Preview is now part of the core execution path, not just a nicety.
+
+1. Controller constructs a draft request
+   - `vaultAddress`
+   - `controller`
+   - `adapter`
+   - `tokenIn`
+   - `tokenOut`
+   - `amountIn`
+   - placeholder quote fields
+
+2. Controller calls `POST /preview`
+
+3. Operator:
+   - reads vault state
+   - fetches a quote from OKX DEX
+   - derives the policy floor for `minAmountOut`
+   - computes `executionHash`
+   - caches the route under that hash
+
+4. Operator returns:
    - estimated fee
-   - policy check summary
-   - warnings and expiry
+   - routed adapter and router info
+   - `expectedOut`
+   - `minAmountOut`
+   - `executionHash`
+   - risk flags and warnings
+   - expiry
 
-Current default for MVP:
-- preview is free
-- preview is advisory only
-- preview does not authorize execution by itself
+5. Controller uses the preview response to build the final intent
 
 ## Paid execution flow
-The runtime path happens every time the controller wants a real execution.
 
-1. **Controller creates an `ExecutionIntent`**
-   - The payload is deterministic and typed.
-   - It includes vault address, token pair, amount, slippage bound, nonce, and deadline.
+This is the runtime path every time the controller wants a real swap.
 
-2. **Controller signs the intent**
-   - The signature proves the controller approved this exact action.
+1. **Controller signs the final `ExecutionIntent`**
+   - includes adapter, quote values, and `executionHash`
 
-3. **Controller requests execution from the operator**
-   - The controller sends the intent and the signature.
-   - The operator first performs free pre-validation.
-   - If the request is acceptable, the controller pays the operator fee via `x402`.
+2. **Controller requests execution**
+   - sends `{intent, signature}`
+
+3. **Operator enforces payment**
+   - if unpaid, return HTTP `402`
+   - controller pays the fee
+   - controller retries with `paymentReference`
 
 4. **Operator validates the request**
-   - derive `intentHash`
-   - verify payment
-   - derive `jobId = keccak256(intentHash, paymentReference)`
-   - verify signature
-   - verify controller allowlist status
-   - verify nonce and deadline
+   - cached quote exists for `executionHash`
+   - cached quote is not expired
+   - adapter matches
+   - quoted output matches
+   - `minAmountOut` is not below the cached policy floor
+   - signature is valid
+   - controller is authorized
+   - vault state still allows the swap
 
-5. **Operator fetches quote and checks**
-   - use Onchain OS DEX for route and quote
-   - use Onchain OS Market and Security for context if needed
-   - abort if route is no longer compatible with policy
+5. **Operator calls the vault**
+   - passes the cached `executionData`
+   - pays gas for `executeSwap(...)`
 
-6. **Operator calls the vault**
-   - the vault re-validates the policy conditions onchain
-   - if valid, the vault executes
-   - if invalid, the transaction reverts
+6. **Vault re-validates everything onchain**
+   - if valid, execute
+   - if invalid, revert
 
-7. **Registry stores the execution receipt**
-   - record the successful job ID
-   - record which vault address executed it
-   - record the tx hash and relevant before/after execution facts
-   - update the onchain success-oriented track record
+7. **Registry stores the receipt**
+   - records the execution outcome
+   - updates operator track record
 
 ## Concrete example
-- `vaultAddress = 0xVault`
-- capital: `5000 USDT`
-- owner policy:
-  - base token: `USDT`
-  - allowed tokens: `USDT`, `ETH`, `OKB`
-  - max per trade: `1000 USDT`
-  - max daily volume: `3000 USDT`
-  - max slippage: `200 bps`
-  - cooldown: `1800 seconds`
+
+- vault capital: `5000 USDT`
+- allowed inputs: `USDT`, `USDC`
+- allowed outputs: `USDT`, `USDC`
+- allowed pair: `USDT -> USDC`
+- allowed adapter: OKX swap adapter
+- max per trade: `1000 USDT`
+- max daily volume: `3000 USDT`
+- max slippage: `200 bps`
+- cooldown: `1800 seconds`
 - authorized controller: `TreasuryBot`
-- authorized operator: `X402 Operator`
 
-### Example request
-`TreasuryBot` signs:
-- `vaultAddress = 0xVault`
-- `tokenIn = USDT`
-- `tokenOut = ETH`
-- `amount = 800`
-- `maxSlippageBps = 200`
-- `nonce = 47`
-- `deadline = <timestamp>`
+### Example path
 
-Then:
-- `X402 Operator` pre-validates the request before charging
-- `TreasuryBot` pays the service fee through `x402`
-- `X402 Operator` validates payment and intent
-- the vault verifies the policy
-- the swap executes if all checks pass
-- the registry records the receipt
+1. `TreasuryBot` asks for a preview of `USDT -> USDC` for `800`
+2. Backend returns:
+   - `expectedOut`
+   - policy-safe `minAmountOut`
+   - `executionHash`
+3. `TreasuryBot` signs the final intent
+4. Backend returns `402`
+5. `TreasuryBot` pays the fee
+6. Backend validates payment and cached quote
+7. Vault executes if all checks still pass
+8. Registry records the receipt
 
 ## What the receipt should make obvious
+
 A useful receipt should answer:
-- which vault address was used
-- which controller requested the action
+
+- which vault executed
+- which controller requested it
 - which operator executed it
+- which adapter was used
 - which payment funded the execution service
-- which transaction actually ran onchain
-- whether the outcome stayed inside expectations
+- what assets moved
+- whether the swap succeeded
 
 ## What happens if execution fails after payment
-MVP keeps the payment semantics simple:
-- the controller pays for the operator's execution service attempt
-- if the payment is valid but the onchain execution reverts, the fee is not automatically refunded
-- this is why the operator should perform free pre-validation before issuing the 402 challenge
 
-This avoids building refund or dispute logic into the first version.
+The current semantics stay simple:
+
+- the fee pays for the operator's execution attempt
+- a reverted onchain execution does not auto-refund the fee
+- this is why preview and offchain validation happen before the 402 challenge
 
 ## Separation of concerns
-- **Preview** tells the caller what would likely happen.
-- **Intent signature** proves the controller approved a specific action.
-- **x402 payment** pays for the service.
-- **Vault execution** decides whether the action is allowed.
-- **Receipt recording** makes the outcome visible after the fact.
 
-If any two of those blur together, the design gets weaker.
+- **Preview** packages the quote the controller can sign
+- **Signature** proves the controller approved the final swap bounds
+- **x402 payment** pays for the service
+- **Vault execution** decides whether the action is allowed
+- **Receipt recording** makes the result visible
+
+If those layers blur together, the design gets weaker.

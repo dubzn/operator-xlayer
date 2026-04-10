@@ -1,12 +1,20 @@
 export interface ExecutionIntent {
   vaultAddress: string;
   controller: string;
+  adapter: string;
   tokenIn: string;
   tokenOut: string;
-  amount: string; // bigint as string for JSON serialization
-  maxSlippageBps: number;
+  amountIn: string;
+  quotedAmountOut: string;
+  minAmountOut: string;
   nonce: number;
   deadline: number;
+  executionHash: string;
+}
+
+export interface RoutePreferences {
+  dexIds?: string[];
+  excludeDexIds?: string[];
 }
 
 export interface ExecutionReceipt {
@@ -14,6 +22,7 @@ export interface ExecutionReceipt {
   vaultAddress: string;
   controller: string;
   operator: string;
+  adapter: string;
   paymentReference: string;
   tokenIn: string;
   tokenOut: string;
@@ -31,6 +40,7 @@ export interface ExecuteRequest {
 
 export interface PreviewRequest {
   intent: ExecutionIntent;
+  routePreferences?: RoutePreferences;
 }
 
 export interface ExecuteResponse {
@@ -40,29 +50,35 @@ export interface ExecuteResponse {
 }
 
 export interface ExecutionPreview {
-  jobClass: "single-swap";
+  jobClass: "swap-v2";
   vaultAddress: string;
   estimatedFee: {
     amount: string;
     token: string;
   };
   quotedRoute: {
+    adapterAddress: string;
     routerAddress: string;
     hasRouteData: boolean;
     expectedOut: string;
+    minAmountOut: string;
+    executionHash: string;
   };
   riskFlags: string[];
   warnings: string[];
+  routePreferencesApplied: RoutePreferences;
   policyCheckSummary: {
     controllerAuthorized: boolean;
+    adapterAllowed: boolean;
     nonceAvailable: boolean;
-    tokenInMatchesBaseToken: boolean;
-    tokenOutAllowed: boolean;
+    inputTokenAllowed: boolean;
+    outputTokenAllowed: boolean;
+    pairAllowed: boolean;
     amountWithinLimit: boolean;
     withinDailyVolume: boolean;
     cooldownMet: boolean;
     vaultNotPaused: boolean;
-    effectiveMaxSlippageBps: number;
+    policyMinAmountOut: string;
   };
   expiresAt: number;
 }

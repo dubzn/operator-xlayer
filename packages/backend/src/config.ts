@@ -14,6 +14,7 @@ export const config = {
   operatorPrivateKey: env("OPERATOR_PRIVATE_KEY"),
   vaultAddress: env("VAULT_ADDRESS"),
   registryAddress: env("REGISTRY_ADDRESS"),
+  swapAdapterAddress: env("SWAP_ADAPTER_ADDRESS"),
   operatorFee: env("OPERATOR_FEE"), // in token smallest unit
   feeToken: env("FEE_TOKEN"), // token address for fee payment
 } as const;
