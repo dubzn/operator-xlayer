@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { useWallet } from "./hooks/useWallet";
 import { useVaultData } from "./hooks/useVaultData";
@@ -9,6 +9,8 @@ import { CreateVault } from "./components/CreateVault";
 import { VaultDashboard } from "./components/VaultDashboard";
 import DarkVeil from "./components/DarkVeil";
 import "./App.css";
+
+const GLOW_SURFACE_SELECTOR = ".app-header, .liquid-panel, .glass-card";
 
 function LiquidGlassDefs() {
   return (
@@ -36,7 +38,44 @@ function LiquidGlassDefs() {
   );
 }
 
+function useBorderGlowSurfaces() {
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+
+      const surface = event.target.closest<HTMLElement>(GLOW_SURFACE_SELECTOR);
+      if (!surface) return;
+
+      const rect = surface.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const kx = dx === 0 ? Infinity : centerX / Math.abs(dx);
+      const ky = dy === 0 ? Infinity : centerY / Math.abs(dy);
+      const edge = Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
+      const edgePercent = edge * 100;
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+      const normalizedAngle = angle < 0 ? angle + 360 : angle;
+      const glowOpacity = Math.min(Math.max((edgePercent - 18) / 62, 0), 1);
+      const fillOpacity = Math.min(Math.max((edgePercent - 36) / 54, 0), 0.68);
+
+      surface.style.setProperty("--edge-proximity", edgePercent.toFixed(3));
+      surface.style.setProperty("--edge-glow-opacity", (glowOpacity * 1.55).toFixed(3));
+      surface.style.setProperty("--edge-fill-opacity", fillOpacity.toFixed(3));
+      surface.style.setProperty("--cursor-angle", `${normalizedAngle.toFixed(3)}deg`);
+    };
+
+    document.addEventListener("pointermove", handlePointerMove, { passive: true });
+    return () => document.removeEventListener("pointermove", handlePointerMove);
+  }, []);
+}
+
 function App() {
+  useBorderGlowSurfaces();
+
   const { address, walletClient, publicClient, connect, disconnect, connecting, error } =
     useWallet();
   const [selectedVault, setSelectedVault] = useState<Address | null>(null);
@@ -69,50 +108,72 @@ function App() {
       <div className="app-noise" />
 
       <div className="app-frame">
-        <header className="app-header liquid-panel liquid-panel-soft">
-          <div className="brand-block">
-            <div className="brand-heading">
-              <span className="display-text brand-mark">X402 Operator</span>
-              <span className="network-badge">X Layer</span>
+        {address && (
+          <header className="app-header liquid-panel liquid-panel-soft">
+            <div className="brand-block">
+              <div className="brand-heading">
+                <span className="display-text brand-mark">X402 Operator</span>
+                <span className="network-badge">X Layer</span>
+              </div>
+              <p className="header-subtitle">
+                Premium operator shell for safe delegated vault execution.
+              </p>
             </div>
-            <p className="header-subtitle">
-              Premium operator shell for safe delegated vault execution.
-            </p>
-          </div>
 
-          <ConnectWallet
-            address={address}
-            connecting={connecting}
-            error={error}
-            onConnect={connect}
-            onDisconnect={() => {
-              disconnect();
-              setSelectedVault(null);
-              setShowCreate(false);
-            }}
-          />
-        </header>
+            <ConnectWallet
+              address={address}
+              connecting={connecting}
+              error={error}
+              onConnect={connect}
+              onDisconnect={() => {
+                disconnect();
+                setSelectedVault(null);
+                setShowCreate(false);
+              }}
+            />
+          </header>
+        )}
 
         <main className={`app-main ${!address ? "app-main-landing" : ""}`}>
           {!address ? (
-            <section className="hero-stage" aria-label="Landing hero">
-              <div className="hero-stack">
-                <p className="hero-pill">Delegated execution cockpit</p>
-                <h1 className="display-text hero-title">Operate policy-bound vaults on X Layer.</h1>
-                <p className="hero-text">
-                  Connect your wallet, open a vault workspace, and manage delegated swap
-                  execution from one calm control surface.
-                </p>
-                <div className="hero-actions">
-                  <button onClick={connect} className="btn btn-primary btn-xl hero-cta">
-                    {connecting ? "Connecting..." : "Connect Wallet"}
-                  </button>
+            <section className="landing-screen" aria-label="X402 Operator landing">
+              <nav className="landing-nav glass-card" aria-label="Landing navigation">
+                <div className="landing-brand">
+                  <img className="landing-brand-logo" src="/logo.png" alt="X Layer" />
                 </div>
-                <p className="hero-note">
-                  Owner deposit flow, live vault controls, and indexed activity appear as soon
-                  as the session is active.
-                </p>
+                <span className="landing-brand-name">X402 Operator</span>
+              </nav>
+
+              <div className="hero-stage">
+                <div className="hero-stack">
+                  <p className="hero-pill">Build X Hackathon</p>
+                  <h1 className="display-text hero-title">
+                    Delegated execution without surrendering custody.
+                  </h1>
+                  <p className="hero-text">
+                    Agents request swaps. Vaults enforce policy. Operators get paid per job.
+                  </p>
+                  <div className="hero-actions">
+                    <button onClick={connect} className="btn btn-primary btn-xl hero-cta">
+                      {connecting ? "Connecting..." : "Connect Wallet"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xl hero-cta hero-docs"
+                      disabled
+                      title="Documentation page coming soon"
+                    >
+                      Documentation
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              <footer className="landing-footer">
+                <span>Policy-enforced execution</span>
+                <span>x402 metering</span>
+                <span>Onchain receipts</span>
+              </footer>
             </section>
           ) : (
             <>
