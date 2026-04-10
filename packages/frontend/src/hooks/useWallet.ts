@@ -25,6 +25,19 @@ const xlayer = {
   },
 } as const;
 
+function parseAccounts(value: unknown): Address[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Wallet did not return an account list");
+  }
+
+  const accounts = value.filter((entry): entry is Address => typeof entry === "string") as Address[];
+  if (accounts.length === 0) {
+    throw new Error("No wallet accounts available");
+  }
+
+  return accounts;
+}
+
 export function useWallet() {
   const [address, setAddress] = useState<Address | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
@@ -42,19 +55,18 @@ export function useWallet() {
         throw new Error("MetaMask not found");
       }
 
-      // Request accounts
-      const accounts = await window.ethereum.request({
+      const accountsResponse = await window.ethereum.request({
         method: "eth_requestAccounts",
       });
+      const accounts = parseAccounts(accountsResponse);
 
-      // Switch to X Layer testnet
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: `0x${CHAIN_ID.toString(16)}` }],
         });
       } catch (switchError: unknown) {
-        if ((switchError as { code: number }).code === 4902) {
+        if ((switchError as { code?: number }).code === 4902) {
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
             params: [
@@ -63,9 +75,7 @@ export function useWallet() {
                 chainName: "X Layer",
                 nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
                 rpcUrls: [RPC_URL],
-                blockExplorerUrls: [
-                  "https://www.okx.com/explorer/xlayer",
-                ],
+                blockExplorerUrls: ["https://www.okx.com/explorer/xlayer"],
               },
             ],
           });
@@ -75,10 +85,10 @@ export function useWallet() {
       const client = createWalletClient({
         chain: xlayer,
         transport: custom(window.ethereum),
-        account: accounts[0] as Address,
+        account: accounts[0],
       });
 
-      setAddress(accounts[0] as Address);
+      setAddress(accounts[0]);
       setWalletClient(client);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
@@ -95,7 +105,6 @@ export function useWallet() {
   return { address, walletClient, publicClient, connect, disconnect, connecting, error };
 }
 
-// Extend window for ethereum
 declare global {
   interface Window {
     ethereum?: {

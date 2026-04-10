@@ -30,43 +30,62 @@ export function VaultSelector({ publicClient, address, selectedVault, onSelect }
   }, [fetchVaults, selectedVault]);
 
   return (
-    <div className="card">
-      <h2>Your Vaults</h2>
+    <section className="vault-selector liquid-panel liquid-panel-soft">
+      <div className="vault-selector-header">
+        <div>
+          <p className="eyebrow">Vault workspace</p>
+          <h2 className="display-text">Open a live vault</h2>
+        </div>
+        <span className="selector-count">{vaults.length} tracked</span>
+      </div>
 
       {vaults.length === 0 ? (
-        <p className="subtitle">No vaults found. Create one or enter an address below.</p>
+        <p className="muted-copy selector-empty">
+          No vaults found for this wallet yet. You can still load a vault address manually.
+        </p>
       ) : (
-        <div className="vault-list">
-          {vaults.map((v) => (
+        <div className="vault-chip-grid">
+          {vaults.map((vault) => (
             <button
-              key={v}
-              className={`vault-item ${selectedVault?.toLowerCase() === v.toLowerCase() ? "selected" : ""}`}
-              onClick={() => onSelect(v)}
+              key={vault}
+              className={`vault-chip ${
+                selectedVault?.toLowerCase() === vault.toLowerCase() ? "selected" : ""
+              }`}
+              onClick={() => onSelect(vault)}
             >
-              {v.slice(0, 6)}...{v.slice(-4)}
+              <span className="vault-chip-title">Vault</span>
+              <span className="display-text vault-chip-address">
+                {vault.slice(0, 6)}...{vault.slice(-4)}
+              </span>
             </button>
           ))}
         </div>
       )}
 
-      <div className="action-row" style={{ marginTop: "1rem" }}>
-        <input
-          type="text"
-          placeholder="0x... vault address"
-          value={manualInput}
-          onChange={(e) => setManualInput(e.target.value)}
-        />
-        <button
-          className="btn btn-sm"
-          onClick={() => {
-            if (manualInput.startsWith("0x")) {
-              onSelect(manualInput as Address);
-            }
-          }}
-        >
-          Load
-        </button>
+      <div className="selector-manual">
+        <label className="field-label" htmlFor="manual-vault-address">
+          Manual vault address
+        </label>
+        <div className="glass-input-row">
+          <input
+            id="manual-vault-address"
+            type="text"
+            placeholder="0x... vault address"
+            value={manualInput}
+            onChange={(event) => setManualInput(event.target.value)}
+          />
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              if (manualInput.startsWith("0x")) {
+                onSelect(manualInput as Address);
+              }
+            }}
+          >
+            Load
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -12,10 +12,13 @@ export function ConnectWallet({ address, connecting, error, onConnect, onDisconn
   if (address) {
     return (
       <div className="wallet-connected">
-        <span className="wallet-address">
-          {address.slice(0, 6)}...{address.slice(-4)}
-        </span>
-        <button onClick={onDisconnect} className="btn btn-sm">
+        <div className="wallet-meta">
+          <span className="wallet-label">Wallet</span>
+          <span className="display-text wallet-address">
+            {address.slice(0, 6)}...{address.slice(-4)}
+          </span>
+        </div>
+        <button onClick={onDisconnect} className="btn btn-danger btn-wide">
           Disconnect
         </button>
       </div>
@@ -24,10 +27,10 @@ export function ConnectWallet({ address, connecting, error, onConnect, onDisconn
 
   return (
     <div className="wallet-connect">
-      <button onClick={onConnect} disabled={connecting} className="btn btn-primary">
+      <button onClick={onConnect} disabled={connecting} className="btn btn-primary btn-wide">
         {connecting ? "Connecting..." : "Connect Wallet"}
       </button>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error wallet-error">{error}</p>}
     </div>
   );
 }

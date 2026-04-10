@@ -1,49 +1,58 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Orbitron:wght@500;700;800&display=swap");
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #7c3aed;
-  --accent-bg: rgba(124, 58, 237, 0.1);
-  --accent-border: rgba(124, 58, 237, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 16px/145% var(--sans);
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  --app-bg: #04050d;
+  --panel-bg: rgba(14, 16, 33, 0.46);
+  --panel-bg-strong: rgba(18, 20, 43, 0.76);
+  --panel-border: rgba(173, 178, 225, 0.16);
+  --panel-highlight: rgba(222, 226, 255, 0.18);
+  --panel-shadow: 0 24px 80px rgba(3, 6, 20, 0.52);
+  --text-primary: #f7f8ff;
+  --text-secondary: rgba(226, 230, 250, 0.8);
+  --text-muted: rgba(193, 199, 228, 0.58);
+  --accent-deep: #272757;
+  --accent: #505081;
+  --accent-strong: #8686ac;
+  --accent-soft: rgba(80, 80, 129, 0.2);
+  --success: #7cc6a4;
+  --danger: #d56382;
+  --field-bg: rgba(255, 255, 255, 0.055);
+  --field-border: rgba(173, 178, 225, 0.14);
+  --sans: "Manrope", "SF Pro Display", "Segoe UI", sans-serif;
+  --display: "Orbitron", "Eurostile", "Bank Gothic", sans-serif;
+  --mono: "SFMono-Regular", "IBM Plex Mono", monospace;
+  font-family: var(--sans);
+  color: var(--text-secondary);
+  background: var(--app-bg);
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #0f1117;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #a78bfa;
-    --accent-bg: rgba(167, 139, 250, 0.15);
-    --accent-border: rgba(167, 139, 250, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  font-size: 15px;
+  background: var(--app-bg);
 }
 
-h1, h2, h3 {
-  font-family: var(--heading);
-  font-weight: 600;
-  color: var(--text-h);
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
 }
 
 * {

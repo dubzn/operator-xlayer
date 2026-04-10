@@ -37,23 +37,23 @@ export function CreateVault({ walletClient, publicClient, address, onVaultCreate
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      // Parse VaultCreated event to get vault address
       const log = receipt.logs.find(
-        (l) => l.topics[0] === "0x15120e52907e2bf0e2e079c3ddaf6c5a1aadb5cca22f0f0e0bca77b0e5be23e7"
+        (entry) =>
+          entry.topics[0] ===
+          "0x15120e52907e2bf0e2e079c3ddaf6c5a1aadb5cca22f0f0e0bca77b0e5be23e7"
       );
 
       if (log && log.topics[2]) {
-        const vaultAddr = ("0x" + log.topics[2].slice(26)) as Address;
-        onVaultCreated(vaultAddr);
+        const vaultAddress = `0x${log.topics[2].slice(26)}` as Address;
+        onVaultCreated(vaultAddress);
       } else {
-        // Fallback: read from factory
         const vaults = await publicClient.readContract({
           address: ADDRESSES.factory,
           abi: VAULT_FACTORY_ABI,
           functionName: "getVaultsByOwner",
           args: [address],
         });
+
         if (vaults.length > 0) {
           onVaultCreated(vaults[vaults.length - 1] as Address);
         }
@@ -66,38 +66,61 @@ export function CreateVault({ walletClient, publicClient, address, onVaultCreate
   };
 
   return (
-    <div className="card">
-      <h2>Create Vault</h2>
-      <p className="subtitle">Deploy your own OperatorVault via the factory</p>
+    <section className="create-vault-panel liquid-panel">
+      <div className="create-vault-copy">
+        <p className="eyebrow">Vault builder</p>
+        <h2 className="display-text">Deploy a new liquid shell</h2>
+        <p className="muted-copy">
+          Base token is fixed to USDT in this flow. Tune limits, slippage, and cooldown
+          before shipping the vault to the factory.
+        </p>
+      </div>
 
-      <div className="form-grid">
+      <div className="create-vault-grid">
         <label>
-          Base Token
+          <span className="field-label">Base Token</span>
           <input value="USDT" disabled />
         </label>
         <label>
-          Max per Trade (USDT)
-          <input type="number" value={maxPerTrade} onChange={(e) => setMaxPerTrade(e.target.value)} />
+          <span className="field-label">Max per Trade (USDT)</span>
+          <input
+            type="number"
+            value={maxPerTrade}
+            onChange={(event) => setMaxPerTrade(event.target.value)}
+          />
         </label>
         <label>
-          Max Daily Volume (USDT)
-          <input type="number" value={maxDaily} onChange={(e) => setMaxDaily(e.target.value)} />
+          <span className="field-label">Max Daily Volume (USDT)</span>
+          <input
+            type="number"
+            value={maxDaily}
+            onChange={(event) => setMaxDaily(event.target.value)}
+          />
         </label>
         <label>
-          Max Slippage (bps)
-          <input type="number" value={slippageBps} onChange={(e) => setSlippageBps(e.target.value)} />
+          <span className="field-label">Max Slippage (bps)</span>
+          <input
+            type="number"
+            value={slippageBps}
+            onChange={(event) => setSlippageBps(event.target.value)}
+          />
         </label>
         <label>
-          Cooldown (seconds)
-          <input type="number" value={cooldown} onChange={(e) => setCooldown(e.target.value)} />
+          <span className="field-label">Cooldown (seconds)</span>
+          <input
+            type="number"
+            value={cooldown}
+            onChange={(event) => setCooldown(event.target.value)}
+          />
         </label>
       </div>
 
-      <button onClick={handleCreate} disabled={creating} className="btn btn-primary">
-        {creating ? "Deploying..." : "Create Vault"}
-      </button>
-
-      {error && <p className="error">{error}</p>}
-    </div>
+      <div className="create-vault-actions">
+        <button onClick={handleCreate} disabled={creating} className="btn btn-primary btn-wide">
+          {creating ? "Deploying..." : "Create Vault"}
+        </button>
+        {error && <p className="error">{error}</p>}
+      </div>
+    </section>
   );
 }
