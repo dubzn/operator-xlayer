@@ -66,6 +66,18 @@ export function getAllEvents(): IndexedEvent[] {
   return getState().events;
 }
 
+/** Write an event directly (called by execute route after successful tx) */
+export function recordEvent(event: IndexedEvent): void {
+  const s = getState();
+  const exists = s.events.some(
+    (e) => e.txHash === event.txHash && e.type === event.type
+  );
+  if (exists) return;
+  s.events.push(event);
+  save();
+  console.log(`[indexer] Recorded ${event.type} event from tx ${event.txHash}`);
+}
+
 async function pollEvents(): Promise<void> {
   if (watchedVaults.size === 0) return;
 

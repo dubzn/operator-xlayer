@@ -18,6 +18,7 @@ import {
 import { executeIntent } from "../services/onchainExecutor.js";
 import { getQuote, storeQuote } from "../services/quoteCache.js";
 import { getSwapQuote, resolveRoutePreferences } from "../services/onchainos.js";
+import { recordEvent } from "../services/indexer.js";
 
 const router = Router();
 
@@ -225,6 +226,23 @@ router.post("/execute", async (req: Request, res: Response) => {
     const result = await executeIntent(intent, signature, paymentReference, cachedQuote);
 
     console.log(`[execute] Success. JobId: ${result.jobId}, TxHash: ${result.txHash}`);
+
+    // Record execution event to JSON indexer
+    recordEvent({
+      vault: intent.vaultAddress.toLowerCase(),
+      type: "ExecutionSucceeded",
+      blockNumber: 0, // filled async below
+      txHash: result.txHash,
+      timestamp: Math.floor(Date.now() / 1000),
+      data: {
+        jobId: result.jobId,
+        controller: validation.controller,
+        tokenIn: intent.tokenIn,
+        tokenOut: intent.tokenOut,
+        amountIn: intent.amountIn,
+        amountOut: cachedQuote.expectedOut,
+      },
+    });
 
     res.json({
       status: "success",
