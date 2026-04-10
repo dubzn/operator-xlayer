@@ -17,6 +17,7 @@ export interface VaultData {
   cooldownSeconds: bigint;
   dailyVolumeUsed: bigint;
   lastExecution: bigint;
+  nextNonce: bigint | null;
   balanceUsdt: bigint;
   balanceUsdc: bigint;
 }
@@ -75,6 +76,13 @@ export function useVaultData(
         readBalance(ADDRESSES.usdc),
       ]);
 
+      let nextNonce: bigint | null = null;
+      try {
+        nextNonce = (await read("nextNonce")) as bigint;
+      } catch (nonceErr) {
+        console.warn("Vault does not expose nextNonce yet:", nonceErr);
+      }
+
       setData({
         owner: owner as Address,
         baseToken: baseToken as Address,
@@ -86,6 +94,7 @@ export function useVaultData(
         cooldownSeconds: cooldownSeconds as bigint,
         dailyVolumeUsed: dailyVolumeUsed as bigint,
         lastExecution: lastExecution as bigint,
+        nextNonce,
         balanceUsdt: balanceUsdt as bigint,
         balanceUsdc: balanceUsdc as bigint,
       });

@@ -165,6 +165,35 @@ contract OperatorVaultTest is Test {
         return vault.executeSwap(intent, routeData, sig, bytes32(uint256(1)), address(registry));
     }
 
+    function test_enumerableViewsExposeInitialConfiguration() public view {
+        address[] memory controllers = vault.getAuthorizedControllers();
+        address[] memory inputTokens = vault.getAllowedInputTokens();
+        address[] memory outputTokens = vault.getAllowedTokens();
+
+        assertEq(controllers.length, 1);
+        assertEq(controllers[0], controller);
+
+        assertEq(inputTokens.length, 1);
+        assertEq(inputTokens[0], address(usdt));
+
+        assertEq(outputTokens.length, 1);
+        assertEq(outputTokens[0], address(weth));
+
+        assertEq(vault.nextNonce(), 0);
+    }
+
+    function test_enumerableViewsUpdateOnRemoval() public {
+        vm.startPrank(vaultOwner);
+        vault.revokeController(controller);
+        vault.removeAllowedInputToken(address(usdt));
+        vault.removeAllowedToken(address(weth));
+        vm.stopPrank();
+
+        assertEq(vault.getAuthorizedControllers().length, 0);
+        assertEq(vault.getAllowedInputTokens().length, 0);
+        assertEq(vault.getAllowedTokens().length, 0);
+    }
+
     function test_validExecution() public {
         uint256 usdtBefore = usdt.balanceOf(address(vault));
         uint256 wethBefore = weth.balanceOf(address(vault));
@@ -174,6 +203,19 @@ contract OperatorVaultTest is Test {
         assertEq(usdt.balanceOf(address(vault)), usdtBefore - SWAP_AMOUNT);
         assertEq(weth.balanceOf(address(vault)), wethBefore + SWAP_OUT);
         assertTrue(jobId != bytes32(0));
+    }
+
+    function test_nextNonceTracksHighestConsumedNonce() public {
+        _executeValidSwap(42);
+        assertEq(vault.nextNonce(), 43);
+
+        vm.warp(vault.lastExecution() + COOLDOWN + 1);
+        _executeValidSwap(7);
+        assertEq(vault.nextNonce(), 43);
+
+        vm.warp(vault.lastExecution() + COOLDOWN + 1);
+        _executeValidSwap(99);
+        assertEq(vault.nextNonce(), 100);
     }
 
     function test_revert_unauthorizedOperator() public {

@@ -3,8 +3,8 @@ export const CHAIN_ID = 196;
 export const RPC_URL = "https://rpc.xlayer.tech";
 
 export const ADDRESSES = {
-  factory: "0xD52B9e6a53075a726f6da015a553Ad46603C8886" as `0x${string}`,
-  registry: "0x888859b6420F80cfC12824C67105855668b67DeA" as `0x${string}`,
+  factory: "0x9b9453B159E67563ae4656841CB53F71fD64B557" as `0x${string}`,
+  registry: "0xa4D8B6764743dFf59bB7b71119d44aC19F0e2235" as `0x${string}`,
   router: "0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954" as `0x${string}`,
   usdt: "0x1E4a5963aBFD975d8c9021ce480b42188849D41d" as `0x${string}`,
   usdc: "0x74b7F16337b8972027F6196A17a631aC6dE26d22" as `0x${string}`,
@@ -129,8 +129,22 @@ export const OPERATOR_VAULT_ABI = [
   },
   {
     type: "function",
+    name: "nextNonce",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "authorizedControllers",
     inputs: [{ name: "controller", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "allowedInputTokens",
+    inputs: [{ name: "token", type: "address" }],
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",
   },
@@ -139,6 +153,27 @@ export const OPERATOR_VAULT_ABI = [
     name: "allowedTokens",
     inputs: [{ name: "token", type: "address" }],
     outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getAuthorizedControllers",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getAllowedInputTokens",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getAllowedTokens",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
     stateMutability: "view",
   },
   {
@@ -157,7 +192,21 @@ export const OPERATOR_VAULT_ABI = [
   },
   {
     type: "function",
+    name: "addAllowedInputToken",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "addAllowedToken",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "removeAllowedInputToken",
     inputs: [{ name: "token", type: "address" }],
     outputs: [],
     stateMutability: "nonpayable",
@@ -250,6 +299,20 @@ export const OPERATOR_VAULT_ABI = [
     name: "ControllerRevoked",
     inputs: [
       { name: "controller", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "InputTokenAllowed",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+    ],
+  },
+  {
+    type: "event",
+    name: "InputTokenRemoved",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
     ],
   },
   {

@@ -196,6 +196,58 @@ function deriveVaultName(baseToken: string) {
   return `${token} Reserve Vault`;
 }
 
+function collectAddresses(
+  events: IndexedEvent[],
+  baseToken: Address
+): {
+  controllers: Address[];
+  allowedInputTokens: Address[];
+  allowedTokens: Address[];
+} {
+  const controllers = new Map<string, Address>();
+  const inputTokens = new Map<string, Address>();
+  const outputTokens = new Map<string, Address>();
+
+  inputTokens.set(baseToken.toLowerCase(), baseToken);
+
+  const sortedEvents = [...events].sort((a, b) => a.blockNumber - b.blockNumber);
+  for (const event of sortedEvents) {
+    if (event.type === "ControllerAuthorized" && event.data.controller) {
+      controllers.set(event.data.controller.toLowerCase(), event.data.controller as Address);
+    }
+
+    if (event.type === "ControllerRevoked" && event.data.controller) {
+      controllers.delete(event.data.controller.toLowerCase());
+    }
+
+    if (event.type === "InputTokenAllowed" && event.data.token) {
+      inputTokens.set(event.data.token.toLowerCase(), event.data.token as Address);
+    }
+
+    if (event.type === "InputTokenRemoved" && event.data.token) {
+      inputTokens.delete(event.data.token.toLowerCase());
+    }
+
+    if (event.type === "Deposit" && event.data.token) {
+      inputTokens.set(event.data.token.toLowerCase(), event.data.token as Address);
+    }
+
+    if (event.type === "TokenAllowed" && event.data.token) {
+      outputTokens.set(event.data.token.toLowerCase(), event.data.token as Address);
+    }
+
+    if (event.type === "TokenRemoved" && event.data.token) {
+      outputTokens.delete(event.data.token.toLowerCase());
+    }
+  }
+
+  return {
+    controllers: Array.from(controllers.values()),
+    allowedInputTokens: Array.from(inputTokens.values()),
+    allowedTokens: Array.from(outputTokens.values()),
+  };
+}
+
 export function VaultDashboard({
   vault,
   data,
@@ -210,13 +262,15 @@ export function VaultDashboard({
   const [activeTab, setActiveTab] = useState<VaultTab>("graph");
   const [activeTimeframe, setActiveTimeframe] = useState<Timeframe>("1M");
   const [controllerInput, setControllerInput] = useState("");
-  const [tokenInput, setTokenInput] = useState("");
+  const [inputTokenInput, setInputTokenInput] = useState("");
+  const [outputTokenInput, setOutputTokenInput] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [depositOpen, setDepositOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [controllers, setControllers] = useState<Address[]>([]);
+  const [allowedInputTokens, setAllowedInputTokens] = useState<Address[]>([]);
   const [allowedTokens, setAllowedTokens] = useState<Address[]>([]);
   const [configSection, setConfigSection] = useState<ConfigSection>("controllers");
 
@@ -232,70 +286,35 @@ export function VaultDashboard({
 
   const loadLists = useCallback(async () => {
     try {
-      const [authLogs, revokeLogs, tokenAddLogs, tokenRemoveLogs] = await Promise.all([
-        publicClient.getLogs({
+      const [controllersResult, inputTokensResult, outputTokensResult] = await Promise.all([
+        publicClient.readContract({
           address: vault,
-          event: {
-            type: "event",
-            name: "ControllerAuthorized",
-            inputs: [{ name: "controller", type: "address", indexed: true }],
-          },
-          fromBlock: 0n,
-          toBlock: "latest",
+          abi: OPERATOR_VAULT_ABI,
+          functionName: "getAuthorizedControllers",
         }),
-        publicClient.getLogs({
+        publicClient.readContract({
           address: vault,
-          event: {
-            type: "event",
-            name: "ControllerRevoked",
-            inputs: [{ name: "controller", type: "address", indexed: true }],
-          },
-          fromBlock: 0n,
-          toBlock: "latest",
+          abi: OPERATOR_VAULT_ABI,
+          functionName: "getAllowedInputTokens",
         }),
-        publicClient.getLogs({
+        publicClient.readContract({
           address: vault,
-          event: {
-            type: "event",
-            name: "TokenAllowed",
-            inputs: [{ name: "token", type: "address", indexed: true }],
-          },
-          fromBlock: 0n,
-          toBlock: "latest",
-        }),
-        publicClient.getLogs({
-          address: vault,
-          event: {
-            type: "event",
-            name: "TokenRemoved",
-            inputs: [{ name: "token", type: "address", indexed: true }],
-          },
-          fromBlock: 0n,
-          toBlock: "latest",
+          abi: OPERATOR_VAULT_ABI,
+          functionName: "getAllowedTokens",
         }),
       ]);
 
-      const controllerSet = new Set<string>();
-      for (const log of authLogs) {
-        controllerSet.add((log.args.controller as string).toLowerCase());
-      }
-      for (const log of revokeLogs) {
-        controllerSet.delete((log.args.controller as string).toLowerCase());
-      }
-      setControllers([...controllerSet] as Address[]);
-
-      const tokenSet = new Set<string>();
-      for (const log of tokenAddLogs) {
-        tokenSet.add((log.args.token as string).toLowerCase());
-      }
-      for (const log of tokenRemoveLogs) {
-        tokenSet.delete((log.args.token as string).toLowerCase());
-      }
-      setAllowedTokens([...tokenSet] as Address[]);
+      setControllers(controllersResult as Address[]);
+      setAllowedInputTokens(inputTokensResult as Address[]);
+      setAllowedTokens(outputTokensResult as Address[]);
     } catch (err) {
-      console.error("Failed to load controllers/tokens:", err);
+      console.warn("Vault does not expose enumerable views yet, falling back to event history:", err);
+      const fallbackLists = collectAddresses(events, data.baseToken);
+      setControllers(fallbackLists.controllers);
+      setAllowedInputTokens(fallbackLists.allowedInputTokens);
+      setAllowedTokens(fallbackLists.allowedTokens);
     }
-  }, [publicClient, vault]);
+  }, [publicClient, vault, events, data.baseToken]);
 
   useEffect(() => {
     loadLists();
@@ -321,7 +340,7 @@ export function VaultDashboard({
       const hash = await fn();
       await publicClient.waitForTransactionReceipt({ hash });
       onRefresh();
-      loadLists();
+      await loadLists();
       if (label === "deposit") {
         setDepositOpen(false);
         setDepositAmount("");
@@ -694,6 +713,10 @@ export function VaultDashboard({
                   </strong>
                 </div>
                 <div className="policy-info-item">
+                  <span className="field-label">Next nonce</span>
+                  <strong>{data.nextNonce !== null ? data.nextNonce.toString() : "Legacy vault"}</strong>
+                </div>
+                <div className="policy-info-item">
                   <span className="field-label">USDT balance</span>
                   <strong>{formatUsdFromBigInt(data.balanceUsdt)}</strong>
                 </div>
@@ -814,72 +837,155 @@ export function VaultDashboard({
                 <div className="config-section">
                   <div className="config-section-header">
                     <div>
-                      <h4 className="display-text">Allowed output tokens</h4>
+                      <h4 className="display-text">Asset allowlists</h4>
                       <p className="muted-copy">
-                        Tokens that the vault is allowed to receive as swap output.
+                        Separate the assets the vault can spend from the assets it is allowed to receive.
                       </p>
                     </div>
-                    <span className="config-count">{allowedTokens.length}</span>
+                    <span className="config-count">{allowedInputTokens.length + allowedTokens.length}</span>
                   </div>
 
-                  {allowedTokens.length === 0 ? (
-                    <div className="config-empty">
-                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                        <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.5"/>
-                        <path d="M11 16h10M16 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                      </svg>
-                      <p>No tokens in the allowlist yet.</p>
-                    </div>
-                  ) : (
-                    <div className="config-list">
-                      {allowedTokens.map((token) => (
-                        <div key={token} className="config-list-item">
-                          <div className="config-list-info">
-                            <span className="config-list-badge">{tokenLabel(token)}</span>
-                            <span className="config-list-full">{token}</span>
-                          </div>
-                          {isOwner && walletClient && (
-                            <button
-                              className="btn btn-danger btn-sm"
-                              disabled={busy !== null}
-                              onClick={() =>
-                                exec("remove-token", () => writeVault("removeAllowedToken", [token]))
-                              }
-                            >
-                              {busy === "remove-token" ? "..." : "Remove"}
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {isOwner && walletClient && (
-                    <div className="config-add-form">
-                      <label className="field-label" htmlFor="token-address">
-                        Add token to allowlist
-                      </label>
-                      <div className="glass-input-row">
-                        <input
-                          id="token-address"
-                          type="text"
-                          placeholder="0x... token address"
-                          value={tokenInput}
-                          onChange={(e) => setTokenInput(e.target.value)}
-                        />
-                        <button
-                          className="btn btn-primary"
-                          disabled={busy !== null || !tokenInput.startsWith("0x")}
-                          onClick={() => {
-                            exec("add-token", () => writeVault("addAllowedToken", [tokenInput]));
-                            setTokenInput("");
-                          }}
-                        >
-                          {busy === "add-token" ? "Adding..." : "Add Token"}
-                        </button>
+                  <div className="config-subsection">
+                    <div className="config-subsection-header">
+                      <div>
+                        <h5>Allowed input / deposit tokens</h5>
+                        <p className="muted-copy">
+                          Tokens the vault can hold, accept as owner deposits, and spend as `tokenIn`.
+                        </p>
                       </div>
+                      <span className="config-count">{allowedInputTokens.length}</span>
                     </div>
-                  )}
+
+                    {allowedInputTokens.length === 0 ? (
+                      <div className="config-empty">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                          <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.5"/>
+                          <path d="M11 16h10M16 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        <p>No input tokens configured yet.</p>
+                      </div>
+                    ) : (
+                      <div className="config-list">
+                        {allowedInputTokens.map((token) => (
+                          <div key={token} className="config-list-item">
+                            <div className="config-list-info">
+                              <span className="config-list-badge">{tokenLabel(token)}</span>
+                              <span className="config-list-full">{token}</span>
+                            </div>
+                            {isOwner && walletClient && (
+                              <button
+                                className="btn btn-danger btn-sm"
+                                disabled={busy !== null}
+                                onClick={() =>
+                                  exec("remove-input-token", () => writeVault("removeAllowedInputToken", [token]))
+                                }
+                              >
+                                {busy === "remove-input-token" ? "..." : "Remove"}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isOwner && walletClient && (
+                      <div className="config-add-form">
+                        <label className="field-label" htmlFor="input-token-address">
+                          Add input / deposit token
+                        </label>
+                        <div className="glass-input-row">
+                          <input
+                            id="input-token-address"
+                            type="text"
+                            placeholder="0x... token address"
+                            value={inputTokenInput}
+                            onChange={(e) => setInputTokenInput(e.target.value)}
+                          />
+                          <button
+                            className="btn btn-primary"
+                            disabled={busy !== null || !inputTokenInput.startsWith("0x")}
+                            onClick={() => {
+                              exec("add-input-token", () => writeVault("addAllowedInputToken", [inputTokenInput]));
+                              setInputTokenInput("");
+                            }}
+                          >
+                            {busy === "add-input-token" ? "Adding..." : "Add Token"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="config-subsection">
+                    <div className="config-subsection-header">
+                      <div>
+                        <h5>Allowed output tokens</h5>
+                        <p className="muted-copy">
+                          Tokens that the vault is allowed to receive as swap output.
+                        </p>
+                      </div>
+                      <span className="config-count">{allowedTokens.length}</span>
+                    </div>
+
+                    {allowedTokens.length === 0 ? (
+                      <div className="config-empty">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                          <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.5"/>
+                          <path d="M11 16h10M16 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        <p>No output tokens in the allowlist yet.</p>
+                      </div>
+                    ) : (
+                      <div className="config-list">
+                        {allowedTokens.map((token) => (
+                          <div key={token} className="config-list-item">
+                            <div className="config-list-info">
+                              <span className="config-list-badge">{tokenLabel(token)}</span>
+                              <span className="config-list-full">{token}</span>
+                            </div>
+                            {isOwner && walletClient && (
+                              <button
+                                className="btn btn-danger btn-sm"
+                                disabled={busy !== null}
+                                onClick={() =>
+                                  exec("remove-token", () => writeVault("removeAllowedToken", [token]))
+                                }
+                              >
+                                {busy === "remove-token" ? "..." : "Remove"}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isOwner && walletClient && (
+                      <div className="config-add-form">
+                        <label className="field-label" htmlFor="token-address">
+                          Add output token
+                        </label>
+                        <div className="glass-input-row">
+                          <input
+                            id="token-address"
+                            type="text"
+                            placeholder="0x... token address"
+                            value={outputTokenInput}
+                            onChange={(e) => setOutputTokenInput(e.target.value)}
+                          />
+                          <button
+                            className="btn btn-primary"
+                            disabled={busy !== null || !outputTokenInput.startsWith("0x")}
+                            onClick={() => {
+                              exec("add-token", () => writeVault("addAllowedToken", [outputTokenInput]));
+                              setOutputTokenInput("");
+                            }}
+                          >
+                            {busy === "add-token" ? "Adding..." : "Add Token"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

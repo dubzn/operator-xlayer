@@ -41,6 +41,7 @@ contract OperatorVault is EIP712 {
     uint256 public currentDay;
     uint256 public dailyVolumeUsed;
     uint256 public lastExecution;
+    uint256 public nextNonce;
 
     mapping(address => bool) public authorizedControllers;
     mapping(address => bool) public allowedInputTokens;
@@ -48,6 +49,13 @@ contract OperatorVault is EIP712 {
     mapping(address => mapping(address => bool)) public allowedPairs;
     mapping(address => bool) public allowedSwapAdapters;
     mapping(uint256 => bool) public usedNonces;
+
+    address[] private authorizedControllerList;
+    mapping(address => uint256) private authorizedControllerIndex;
+    address[] private allowedInputTokenList;
+    mapping(address => uint256) private allowedInputTokenIndex;
+    address[] private allowedTokenList;
+    mapping(address => uint256) private allowedTokenIndex;
 
     event Deposit(address indexed token, uint256 amount);
     event Withdraw(address indexed token, uint256 amount, address indexed to);
@@ -121,7 +129,7 @@ contract OperatorVault is EIP712 {
         maxSlippageBps = _maxSlippageBps;
         cooldownSeconds = _cooldownSeconds;
 
-        allowedInputTokens[_baseToken] = true;
+        _setAllowedInputToken(_baseToken, true);
         emit InputTokenAllowed(_baseToken);
 
         if (_defaultSwapAdapter != address(0)) {
@@ -141,33 +149,45 @@ contract OperatorVault is EIP712 {
     }
 
     function authorizeController(address controller) external onlyOwner {
-        authorizedControllers[controller] = true;
+        _setAuthorizedController(controller, true);
         emit ControllerAuthorized(controller);
     }
 
     function revokeController(address controller) external onlyOwner {
-        authorizedControllers[controller] = false;
+        _setAuthorizedController(controller, false);
         emit ControllerRevoked(controller);
     }
 
     function addAllowedInputToken(address token) external onlyOwner {
-        allowedInputTokens[token] = true;
+        _setAllowedInputToken(token, true);
         emit InputTokenAllowed(token);
     }
 
     function removeAllowedInputToken(address token) external onlyOwner {
-        allowedInputTokens[token] = false;
+        _setAllowedInputToken(token, false);
         emit InputTokenRemoved(token);
     }
 
     function addAllowedToken(address token) external onlyOwner {
-        allowedTokens[token] = true;
+        _setAllowedToken(token, true);
         emit TokenAllowed(token);
     }
 
     function removeAllowedToken(address token) external onlyOwner {
-        allowedTokens[token] = false;
+        _setAllowedToken(token, false);
         emit TokenRemoved(token);
+    }
+
+    function getAuthorizedControllers() external view returns (address[] memory) {
+        return authorizedControllerList;
+    }
+
+    function getAllowedInputTokens() external view returns (address[] memory) {
+        return allowedInputTokenList;
+    }
+
+    function getAllowedTokens() external view returns (address[] memory) {
+        return allowedTokenList;
     }
 
     function allowPair(address tokenIn, address tokenOut) external onlyOwner {
@@ -238,6 +258,9 @@ contract OperatorVault is EIP712 {
 
         if (usedNonces[intent.nonce]) revert NonceAlreadyUsed(intent.nonce);
         usedNonces[intent.nonce] = true;
+        if (intent.nonce >= nextNonce) {
+            nextNonce = intent.nonce + 1;
+        }
 
         if (block.timestamp > intent.deadline) revert IntentExpired(intent.deadline);
         if (!allowedInputTokens[intent.tokenIn]) revert InputTokenNotAllowed(intent.tokenIn);
@@ -352,5 +375,66 @@ contract OperatorVault is EIP712 {
 
     function DOMAIN_SEPARATOR() external view returns (bytes32) {
         return _domainSeparatorV4();
+    }
+
+    function _setAuthorizedController(address controller, bool authorized) internal {
+        authorizedControllers[controller] = authorized;
+        if (authorized) {
+            _addAddressToList(authorizedControllerList, authorizedControllerIndex, controller);
+        } else {
+            _removeAddressFromList(authorizedControllerList, authorizedControllerIndex, controller);
+        }
+    }
+
+    function _setAllowedInputToken(address token, bool allowed) internal {
+        allowedInputTokens[token] = allowed;
+        if (allowed) {
+            _addAddressToList(allowedInputTokenList, allowedInputTokenIndex, token);
+        } else {
+            _removeAddressFromList(allowedInputTokenList, allowedInputTokenIndex, token);
+        }
+    }
+
+    function _setAllowedToken(address token, bool allowed) internal {
+        allowedTokens[token] = allowed;
+        if (allowed) {
+            _addAddressToList(allowedTokenList, allowedTokenIndex, token);
+        } else {
+            _removeAddressFromList(allowedTokenList, allowedTokenIndex, token);
+        }
+    }
+
+    function _addAddressToList(
+        address[] storage list,
+        mapping(address => uint256) storage indexes,
+        address value
+    ) internal {
+        if (indexes[value] != 0) {
+            return;
+        }
+
+        list.push(value);
+        indexes[value] = list.length;
+    }
+
+    function _removeAddressFromList(
+        address[] storage list,
+        mapping(address => uint256) storage indexes,
+        address value
+    ) internal {
+        uint256 index = indexes[value];
+        if (index == 0) {
+            return;
+        }
+
+        uint256 lastIndex = list.length;
+        if (index != lastIndex) {
+            address lastValue = list[lastIndex - 1];
+            list[index - 1] = lastValue;
+            indexes[lastValue] = index;
+        }
+
+        list.pop();
+        delete indexes[value];
     }
 }
