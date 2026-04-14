@@ -28,10 +28,18 @@ export function useVaultData(
 ) {
   const [data, setData] = useState<VaultData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!vaultAddress) return;
+    if (!vaultAddress) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     try {
       const read = (fname: string) =>
         publicClient.readContract({
@@ -100,16 +108,24 @@ export function useVaultData(
       });
     } catch (err) {
       console.error("Failed to read vault:", err);
+      setData(null);
+      setError(err instanceof Error ? err.message : "Failed to read vault");
     } finally {
       setLoading(false);
     }
   }, [publicClient, vaultAddress]);
 
   useEffect(() => {
+    if (!vaultAddress) {
+      setData(null);
+      setError(null);
+      return undefined;
+    }
+
     refresh();
     const interval = setInterval(refresh, 10_000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, vaultAddress]);
 
-  return { data, loading, refresh };
+  return { data, loading, error, refresh };
 }

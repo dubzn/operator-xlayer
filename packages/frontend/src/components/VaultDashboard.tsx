@@ -401,7 +401,6 @@ export function VaultDashboard({
           <div className="vault-summary-panel liquid-panel">
             <div className="vault-summary-top">
               <div>
-                <p className="eyebrow">Selected vault</p>
                 <h2 className="display-text vault-name">{vaultName}</h2>
               </div>
               <button className="vault-copy" onClick={copyVaultAddress} title="Copy vault address">
