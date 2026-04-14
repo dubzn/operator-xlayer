@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { PublicClient, Address } from "viem";
 import {
   OPERATOR_VAULT_ABI,
@@ -29,16 +29,19 @@ export function useVaultData(
   const [data, setData] = useState<VaultData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasData = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!vaultAddress) {
       setData(null);
       setLoading(false);
       setError(null);
+      hasData.current = false;
       return;
     }
 
-    setLoading(true);
+    // Only show loading spinner on the initial fetch — subsequent polls run silently
+    if (!hasData.current) setLoading(true);
     setError(null);
     try {
       const read = (fname: string) =>
@@ -106,6 +109,7 @@ export function useVaultData(
         balanceUsdt: balanceUsdt as bigint,
         balanceUsdc: balanceUsdc as bigint,
       });
+      hasData.current = true;
     } catch (err) {
       console.error("Failed to read vault:", err);
       setData(null);
@@ -116,6 +120,8 @@ export function useVaultData(
   }, [publicClient, vaultAddress]);
 
   useEffect(() => {
+    hasData.current = false;
+
     if (!vaultAddress) {
       setData(null);
       setError(null);
