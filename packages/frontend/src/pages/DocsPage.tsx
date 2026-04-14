@@ -43,7 +43,14 @@ export function DocsPage({ address, connecting, error, onConnect }: Props) {
             </Link>
           ) : (
             <button onClick={onConnect} className="btn btn-primary btn-xl hero-cta">
-              {connecting ? "Connecting..." : "Connect Wallet"}
+              {connecting ? (
+                "Connecting..."
+              ) : (
+                <>
+                  <img src="/logos/metamask.png" alt="" className="btn-wallet-logo" />
+                  Connect with MetaMask
+                </>
+              )}
             </button>
           )}
           <Link to="/home" className="btn btn-ghost btn-xl hero-cta">

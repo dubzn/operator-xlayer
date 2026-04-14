@@ -20,19 +20,37 @@ interface Props {
 
 export function VaultPreviewCard({ vault, publicClient }: Props) {
   const { data, loading, error } = useVaultData(publicClient, vault);
+
+  if (loading && !data) {
+    return (
+      <div className="vault-card vault-card-skeleton glass-card" aria-hidden="true">
+        <div className="vault-card-top">
+          <div className="skeleton-line skeleton-line-title" />
+          <div className="skeleton-pill" />
+        </div>
+        <div className="vault-card-main">
+          <div className="skeleton-line skeleton-line-label" />
+          <div className="skeleton-line skeleton-line-value" />
+        </div>
+        <div className="vault-card-meta vault-card-meta-2col">
+          <div className="vault-card-stat skeleton-stat">
+            <div className="skeleton-line skeleton-line-label" />
+            <div className="skeleton-line skeleton-line-short" />
+          </div>
+          <div className="vault-card-stat skeleton-stat">
+            <div className="skeleton-line skeleton-line-label" />
+            <div className="skeleton-line skeleton-line-short" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const netValue = data ? deriveNetValueUsd(data) : 0;
   const tokens = data ? collectVaultTokens(data) : [];
   const performance = deriveVaultNetworkDelta24h(vault);
-  const statusTone = error ? "neutral" : data?.paused ? "paused" : loading && !data ? "neutral" : "active";
-  const statusLabel = error
-    ? "Unavailable"
-    : data
-      ? data.paused
-        ? "Paused"
-        : "Active"
-      : loading
-        ? "Syncing"
-        : "Ready";
+  const statusTone = error ? "neutral" : data?.paused ? "paused" : "active";
+  const statusLabel = error ? "Unavailable" : data?.paused ? "Paused" : "Active";
 
   return (
     <Link to={`/vaults/${vault}`} className="vault-card glass-card">

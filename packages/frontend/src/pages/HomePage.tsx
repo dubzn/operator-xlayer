@@ -28,12 +28,19 @@ export function HomePage({ address, connecting, error, onConnect }: Props) {
               </Link>
             ) : (
               <button onClick={onConnect} className="btn btn-primary btn-xl hero-cta">
-                {connecting ? "Connecting..." : "Connect Wallet"}
+                {connecting ? (
+                  "Connecting..."
+                ) : (
+                  <>
+                    <img src="/logos/metamask.png" alt="" className="btn-wallet-logo" />
+                    Connect with MetaMask
+                  </>
+                )}
               </button>
             )}
 
-            <Link to="/docs" className="btn btn-ghost btn-xl hero-cta hero-docs">
-              Documentation
+            <Link to="/docs" className="btn btn-ghost hero-cta hero-docs">
+              Docs
             </Link>
           </div>
 
@@ -41,11 +48,6 @@ export function HomePage({ address, connecting, error, onConnect }: Props) {
         </div>
       </div>
 
-      <footer className="landing-footer">
-        <span>Policy-enforced execution</span>
-        <span>x402 metering</span>
-        <span>Onchain receipts</span>
-      </footer>
     </section>
   );
 }

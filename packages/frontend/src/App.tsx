@@ -5,6 +5,7 @@ import { useWallet } from "./hooks/useWallet";
 import { AppNav } from "./components/AppNav";
 import { PublicNav } from "./components/PublicNav";
 import { WalletUtilityBar } from "./components/WalletUtilityBar";
+import { AppFooter } from "./components/AppFooter";
 import DarkVeil from "./components/DarkVeil";
 import { HomePage } from "./pages/HomePage";
 import { DocsPage } from "./pages/DocsPage";
@@ -194,6 +195,7 @@ function App() {
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </main>
+        <AppFooter />
       </div>
     </div>
   );

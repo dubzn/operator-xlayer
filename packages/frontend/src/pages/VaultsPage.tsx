@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { Address, PublicClient } from "viem";
 import { Link } from "react-router-dom";
 import { useOwnedVaults } from "../hooks/useOwnedVaults";
@@ -12,6 +12,21 @@ interface Props {
 export function VaultsPage({ publicClient, address }: Props) {
   const { vaults, loading, error } = useOwnedVaults(publicClient, address);
   const railRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+
+    const check = () => {
+      setHasOverflow(rail.scrollWidth > rail.clientWidth + 1);
+    };
+
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [vaults.length]);
 
   const scrollRail = (direction: -1 | 1) => {
     if (!railRef.current) return;
@@ -38,14 +53,6 @@ export function VaultsPage({ publicClient, address }: Props) {
 
       {!error && loading && vaults.length === 0 ? (
         <section className="vault-carousel liquid-panel liquid-panel-soft">
-          <div className="vault-carousel-header">
-            <div>
-              <h2 className="display-text">Syncing vaults</h2>
-              <p className="muted-copy">Pulling your workspace from chain.</p>
-            </div>
-            <span className="selector-count">Loading</span>
-          </div>
-
           <div className="vault-carousel-rail">
             {Array.from({ length: 3 }, (_, index) => (
               <div key={index} className="vault-card vault-card-skeleton glass-card" aria-hidden="true">
@@ -90,39 +97,44 @@ export function VaultsPage({ publicClient, address }: Props) {
 
       {vaults.length > 0 ? (
         <section className="vault-carousel liquid-panel liquid-panel-soft">
-          <div className="vault-carousel-top">
-            <Link to="/vaults/new" className="btn btn-primary btn-callout">
-              New Vault
-            </Link>
-            <span className="selector-count">{vaults.length} tracked</span>
-          </div>
-
           <div ref={railRef} className="vault-carousel-rail">
             {vaults.map((vault) => (
               <VaultPreviewCard key={vault} vault={vault} publicClient={publicClient} />
             ))}
+            <Link to="/vaults/new" className="vault-card vault-card-new glass-card">
+              <div className="vault-card-new-icon">+</div>
+              <div className="vault-card-new-copy">
+                <p className="eyebrow">Create</p>
+                <h3 className="display-text vault-card-title">New Vault</h3>
+                <p className="vault-card-new-sub">Deploy a new shell</p>
+              </div>
+            </Link>
           </div>
 
-          <div className="vault-carousel-bottom">
-            <div className="vault-carousel-controls">
-              <button
-                type="button"
-                className="vault-carousel-button"
-                onClick={() => scrollRail(-1)}
-                aria-label="Scroll vaults left"
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                className="vault-carousel-button"
-                onClick={() => scrollRail(1)}
-                aria-label="Scroll vaults right"
-              >
-                →
-              </button>
+          <p className="muted-copy vault-carousel-hint">Click on a vault to see more details</p>
+
+          {hasOverflow ? (
+            <div className="vault-carousel-bottom">
+              <div className="vault-carousel-controls">
+                <button
+                  type="button"
+                  className="vault-carousel-button"
+                  onClick={() => scrollRail(-1)}
+                  aria-label="Scroll vaults left"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  className="vault-carousel-button"
+                  onClick={() => scrollRail(1)}
+                  aria-label="Scroll vaults right"
+                >
+                  →
+                </button>
+              </div>
             </div>
-          </div>
+          ) : null}
         </section>
       ) : null}
     </section>

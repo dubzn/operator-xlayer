@@ -48,6 +48,15 @@
   width: min(1440px, calc(100vw - 28px));
   margin: 0 auto;
   padding: 18px 0 40px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 58px); /* 100vh minus top (18) + bottom (40) padding */
+}
+
+.app-main {
+  flex: 1;
+  display: block;
+  margin-top: 18px;
 }
 
 /* Reusable glassmorphism surface */
@@ -255,15 +264,11 @@
   text-align: right;
 }
 
-.app-main {
-  display: block;
-  margin-top: 18px;
-}
 
 .landing-screen {
   min-height: calc(100vh - 188px);
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   gap: 22px;
 }
 
@@ -706,7 +711,7 @@
   gap: 14px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  padding-bottom: 4px;
+  padding: 8px 2px 8px;
 }
 
 .vault-carousel-rail::-webkit-scrollbar {
@@ -727,6 +732,10 @@
   text-decoration: none;
   color: inherit;
   scroll-snap-align: start;
+  /* override glass-card dark base to sit lighter inside the carousel panel */
+  background: rgba(134, 134, 172, 0.05);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
 .vault-card:hover {
@@ -2161,6 +2170,14 @@ input:disabled {
   }
 }
 
+/* ── Wallet logo inside button ── */
+.btn-wallet-logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 /* ── Callout button variant ── */
 .btn-callout {
   border-color: rgba(168, 162, 230, 0.5);
@@ -2199,6 +2216,7 @@ input:disabled {
   align-items: center;
   text-align: center;
   gap: 8px;
+  margin-bottom: 36px;
 }
 
 .page-intro-centered h1 {
@@ -2210,17 +2228,68 @@ input:disabled {
   justify-content: flex-end;
 }
 
-/* ── Vault carousel top / bottom bars ── */
-.vault-carousel-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+/* ── Vault carousel hint text ── */
+.vault-carousel-hint {
+  text-align: center;
 }
 
+/* ── Vault carousel bottom bar ── */
 .vault-carousel-bottom {
   display: flex;
   justify-content: flex-end;
+}
+
+/* ── New vault card ── */
+.vault-card-new {
+  border-style: dashed;
+  border-color: rgba(134, 134, 172, 0.2);
+  background: rgba(14, 18, 36, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.vault-card-new:hover {
+  border-color: rgba(134, 134, 172, 0.4);
+  background: rgba(80, 80, 129, 0.12);
+  transform: translateY(-2px);
+}
+
+.vault-card-new-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(134, 134, 172, 0.28);
+  background: rgba(134, 134, 172, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.vault-card-new:hover .vault-card-new-icon {
+  border-color: rgba(134, 134, 172, 0.52);
+  background: rgba(80, 80, 129, 0.18);
+  color: var(--text-primary);
+}
+
+.vault-card-new-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.vault-card-new-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* ── Vault card stat address ── */
