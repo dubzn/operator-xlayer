@@ -397,8 +397,7 @@ export function VaultDashboard({
   return (
     <>
       <section className="vault-scene">
-        <aside className="vault-summary-rail">
-          <div className="vault-summary-panel liquid-panel">
+        <div className="vault-summary-panel liquid-panel">
             <div className="vault-summary-top">
               <div>
                 <h2 className="display-text vault-name">{vaultName}</h2>
@@ -442,10 +441,7 @@ export function VaultDashboard({
                 Deposit
               </button>
             ) : null}
-          </div>
-
-          <VaultHistory events={events} loading={historyLoading} />
-        </aside>
+        </div>
 
         <section className="vault-primary-panel liquid-panel">
           <div className="vault-primary-header">
@@ -1033,6 +1029,33 @@ export function VaultDashboard({
             </div>
           )}
         </section>
+
+        <section className="vault-tokens-panel liquid-panel liquid-panel-soft">
+          <div className="history-panel-header">
+            <div>
+              <p className="eyebrow">Holdings</p>
+              <h3 className="display-text">Tokens</h3>
+            </div>
+          </div>
+          <div className="token-rows">
+            {[
+              { symbol: "USDT", balance: data.balanceUsdt, name: "Tether USD" },
+              { symbol: "USDC", balance: data.balanceUsdc, name: "USD Coin" },
+            ].map((row) => (
+              <div key={row.symbol} className="token-row">
+                <span className={`token-badge token-badge-${row.symbol.toLowerCase()}`}>
+                  {row.symbol}
+                </span>
+                <div className="token-row-meta">
+                  <strong className="token-row-amount">{formatUsd(Number(row.balance) / 1e6)}</strong>
+                  <span className="token-row-sub">{row.name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <VaultHistory events={events} loading={historyLoading} />
       </section>
 
       {error ? <p className="error dashboard-error">{error}</p> : null}

@@ -5,7 +5,7 @@ import { VaultDashboard } from "../components/VaultDashboard";
 import { useOwnedVaults } from "../hooks/useOwnedVaults";
 import { useVaultData } from "../hooks/useVaultData";
 import { useVaultHistory } from "../hooks/useVaultHistory";
-import { shortAddr } from "../lib/vaults";
+import { shortAddr, deriveVaultName } from "../lib/vaults";
 
 interface Props {
   walletClient: WalletClient | null;
@@ -44,60 +44,86 @@ export function VaultDetailPage({ walletClient, publicClient, address }: Props) 
     );
   }
 
-  if (ownedVaultsLoading) {
-    return (
-      <section className="empty-state liquid-panel">
-        <p className="eyebrow">Vault detail</p>
-        <h2 className="display-text">Loading your workspace</h2>
-        <p className="muted-copy">Checking whether this vault belongs to your connected account.</p>
-      </section>
-    );
-  }
-
-  if (!ownedVault) {
-    return (
-      <section className="empty-state liquid-panel">
-        <p className="eyebrow">Vault detail</p>
-        <h2 className="display-text">Vault not found in your workspace</h2>
-        <p className="muted-copy">
-          {shortAddr(parsedVault)} is not part of the vaults returned for this connected wallet.
-        </p>
-        <Link to="/vaults" className="btn btn-ghost btn-wide">
-          Back to Vaults
-        </Link>
-      </section>
-    );
-  }
+  const showSkeleton = ownedVaultsLoading || (Boolean(ownedVault) && loading && !data);
 
   return (
     <section className="vault-detail-page">
-      <div className="page-intro page-intro-compact">
-        <div className="page-copy">
-          <p className="eyebrow">Vault detail</p>
-          <h1 className="display-text">Live vault workspace</h1>
-          <p className="muted-copy">
-            Detailed graph, policy configuration, and recent activity for {shortAddr(ownedVault)}.
-          </p>
+      {data ? (
+        <div className="page-intro-centered">
+          <h1 className="display-text">{deriveVaultName(data.baseToken)}</h1>
+          <p className="muted-copy">{shortAddr(ownedVault!)}</p>
         </div>
+      ) : null}
 
-        <div className="page-intro-actions">
-          <Link to="/vaults" className="btn btn-ghost btn-wide">
-            All Vaults
-          </Link>
+      {showSkeleton ? (
+        <div className="vault-scene" aria-hidden="true">
+          <div className="vault-panel-skel" style={{ gridArea: "summary" }}>
+            <div className="skeleton-line skeleton-line-title" />
+            <div className="vault-summary-main">
+              <div className="skeleton-line skeleton-line-label" />
+              <div className="skeleton-line skeleton-line-value" />
+              <div className="skeleton-pill" style={{ marginTop: 4 }} />
+            </div>
+            <div className="skel-stat-row">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="skeleton-stat">
+                  <div className="skeleton-line skeleton-line-label" />
+                  <div className="skeleton-line skeleton-line-short" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="vault-panel-skel" style={{ gridArea: "primary" }}>
+            <div className="skel-tab-row">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="skeleton-pill skel-tab-pill" />
+              ))}
+            </div>
+            <div className="skel-chart" />
+          </div>
+
+          <div className="vault-panel-skel" style={{ gridArea: "tokens" }}>
+            <div className="skeleton-line skeleton-line-label" />
+            <div className="skeleton-line skeleton-line-title" style={{ width: "50%" }} />
+            {[0, 1].map((i) => (
+              <div key={i} className="skel-entry">
+                <div className="skeleton-pill skel-pill-sm" />
+                <div className="skeleton-line skeleton-line-short skel-entry-line" />
+              </div>
+            ))}
+          </div>
+
+          <div className="vault-panel-skel" style={{ gridArea: "history" }}>
+            <div className="skeleton-line skeleton-line-label" />
+            <div className="skeleton-line skeleton-line-title" style={{ width: "55%" }} />
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="skel-entry">
+                <div className="skeleton-pill skel-icon-box" />
+                <div className="skel-entry-copy">
+                  <div className="skeleton-line skeleton-line-label" />
+                  <div className="skeleton-line skeleton-line-short" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {loading && !data ? (
+      {!ownedVaultsLoading && !ownedVault ? (
         <section className="empty-state liquid-panel">
-          <p className="eyebrow">Loading vault</p>
-          <h2 className="display-text">Syncing live vault state</h2>
+          <p className="eyebrow">Vault detail</p>
+          <h2 className="display-text">Vault not found in your workspace</h2>
           <p className="muted-copy">
-            Pulling balances, policy guards, and indexed activity from X Layer.
+            {shortAddr(parsedVault)} is not part of the vaults returned for this connected wallet.
           </p>
+          <Link to="/vaults" className="btn btn-ghost btn-wide">
+            Back to Vaults
+          </Link>
         </section>
       ) : null}
 
-      {!loading && !data ? (
+      {ownedVault && !loading && !data ? (
         <section className="empty-state liquid-panel">
           <p className="eyebrow">Vault detail</p>
           <h2 className="display-text">Unable to load this vault</h2>
@@ -110,7 +136,7 @@ export function VaultDetailPage({ walletClient, publicClient, address }: Props) 
 
       {data ? (
         <VaultDashboard
-          vault={ownedVault}
+          vault={ownedVault!}
           data={data}
           isOwner={isOwner}
           walletClient={walletClient}

@@ -894,6 +894,97 @@
   }
 }
 
+/* Vault detail skeleton panels */
+.vault-panel-skel {
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  border-radius: 28px;
+  background: rgba(134, 134, 172, 0.04);
+  border: 1px solid rgba(173, 178, 225, 0.10);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vault-panel-skel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.03) 38%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.03) 62%,
+    transparent 100%
+  );
+  transform: translateX(-130%);
+  animation: vault-skeleton-shimmer 1.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.skel-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.skel-tab-row {
+  display: flex;
+  gap: 10px;
+}
+
+.skel-tab-pill {
+  width: 90px;
+}
+
+.skel-chart {
+  flex: 1;
+  min-height: 240px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(173, 178, 225, 0.04)),
+    rgba(173, 178, 225, 0.06);
+  border: 1px solid rgba(173, 178, 225, 0.06);
+}
+
+.skel-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(173, 178, 225, 0.08);
+}
+
+.skel-pill-sm {
+  width: 48px;
+  min-height: 22px;
+  flex-shrink: 0;
+}
+
+.skel-icon-box {
+  width: 36px;
+  min-height: 36px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.skel-entry-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skel-entry-line {
+  flex: 1;
+  min-width: 0;
+}
+
 .control-strip {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
@@ -1142,24 +1233,34 @@ input:disabled {
 .vault-scene {
   display: grid;
   grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.85fr);
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "summary primary"
+    "tokens  history";
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.vault-summary-rail {
-  display: grid;
-  gap: 14px;
-}
+.vault-summary-panel { grid-area: summary; }
+.vault-primary-panel { grid-area: primary; }
+.vault-tokens-panel  { grid-area: tokens; }
+.history-panel       { grid-area: history; }
 
 .vault-summary-panel,
 .history-panel,
-.vault-primary-panel {
+.vault-primary-panel,
+.vault-tokens-panel {
   padding: 20px;
 }
 
 .vault-summary-panel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
+}
+
+.vault-summary-panel .btn-hero {
+  margin-top: auto;
 }
 
 .vault-summary-top {
@@ -1251,6 +1352,46 @@ input:disabled {
 
 .summary-stat strong {
   color: var(--text-primary);
+}
+
+.vault-tokens-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.token-rows {
+  display: grid;
+  gap: 10px;
+}
+
+.token-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(134, 134, 172, 0.05);
+  border: 1px solid rgba(173, 178, 225, 0.14);
+}
+
+.token-row-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.token-row-amount {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.token-row-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .history-scroll {
@@ -1941,10 +2082,18 @@ input:disabled {
 
 @media (max-width: 1180px) {
   .control-strip,
-  .vault-scene,
   .docs-grid,
   .vault-card-meta {
     grid-template-columns: 1fr;
+  }
+
+  .vault-scene {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "summary"
+      "primary"
+      "tokens"
+      "history";
   }
 
   .page-intro,
