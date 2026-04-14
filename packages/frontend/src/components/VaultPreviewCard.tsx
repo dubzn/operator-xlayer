@@ -75,11 +75,7 @@ export function VaultPreviewCard({ vault, publicClient }: Props) {
         )}
       </div>
 
-      <div className="vault-card-meta">
-        <div className="vault-card-stat vault-card-stat-address">
-          <span className="field-label">Address</span>
-          <strong title={vault}>{shortAddr(vault)}</strong>
-        </div>
+      <div className="vault-card-meta vault-card-meta-2col">
         <div className="vault-card-stat">
           <span className="field-label">Tokens</span>
           {tokens.length > 0 ? (

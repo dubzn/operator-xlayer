@@ -24,17 +24,9 @@ export function VaultsPage({ publicClient, address }: Props) {
 
   return (
     <section className="vaults-page">
-      <div className="page-intro page-intro-tight">
-        <div className="page-copy">
-          <h1 className="display-text">Your vaults</h1>
-          <p className="muted-copy">Open a vault or spin up a new shell.</p>
-        </div>
-
-        <div className="page-intro-actions">
-          <Link to="/vaults/new" className="btn btn-primary btn-wide btn-callout">
-            New Vault
-          </Link>
-        </div>
+      <div className="page-intro-centered">
+        <h1 className="display-text">Your vaults</h1>
+        <p className="muted-copy">Open a vault or spin up a new shell.</p>
       </div>
 
       {error ? (
@@ -76,10 +68,6 @@ export function VaultsPage({ publicClient, address }: Props) {
                     <div className="skeleton-line skeleton-line-label" />
                     <div className="skeleton-line skeleton-line-short" />
                   </div>
-                  <div className="vault-card-stat skeleton-stat">
-                    <div className="skeleton-line skeleton-line-label" />
-                    <div className="skeleton-line skeleton-line-short" />
-                  </div>
                 </div>
               </div>
             ))}
@@ -102,34 +90,38 @@ export function VaultsPage({ publicClient, address }: Props) {
 
       {vaults.length > 0 ? (
         <section className="vault-carousel liquid-panel liquid-panel-soft">
-          <div className="vault-carousel-header vault-carousel-header-compact">
+          <div className="vault-carousel-top">
+            <Link to="/vaults/new" className="btn btn-primary btn-callout">
+              New Vault
+            </Link>
             <span className="selector-count">{vaults.length} tracked</span>
-            <div className="vault-carousel-tools">
-              <div className="vault-carousel-controls">
-                <button
-                  type="button"
-                  className="vault-carousel-button"
-                  onClick={() => scrollRail(-1)}
-                  aria-label="Scroll vaults left"
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  className="vault-carousel-button"
-                  onClick={() => scrollRail(1)}
-                  aria-label="Scroll vaults right"
-                >
-                  →
-                </button>
-              </div>
-            </div>
           </div>
 
           <div ref={railRef} className="vault-carousel-rail">
             {vaults.map((vault) => (
               <VaultPreviewCard key={vault} vault={vault} publicClient={publicClient} />
             ))}
+          </div>
+
+          <div className="vault-carousel-bottom">
+            <div className="vault-carousel-controls">
+              <button
+                type="button"
+                className="vault-carousel-button"
+                onClick={() => scrollRail(-1)}
+                aria-label="Scroll vaults left"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                className="vault-carousel-button"
+                onClick={() => scrollRail(1)}
+                aria-label="Scroll vaults right"
+              >
+                →
+              </button>
+            </div>
           </div>
         </section>
       ) : null}

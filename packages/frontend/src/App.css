@@ -794,6 +794,10 @@
   align-items: stretch;
 }
 
+.vault-card-meta-2col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .vault-card-stat {
   display: grid;
   gap: 6px;
@@ -2188,8 +2192,34 @@ input:disabled {
   padding: 4px 0;
 }
 
+/* ── Page intro centered (standalone heading block) ── */
+.page-intro-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.page-intro-centered h1 {
+  color: var(--text-primary);
+}
+
 /* ── Vault carousel compact header ── */
 .vault-carousel-header-compact {
+  justify-content: flex-end;
+}
+
+/* ── Vault carousel top / bottom bars ── */
+.vault-carousel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vault-carousel-bottom {
+  display: flex;
   justify-content: flex-end;
 }
 
