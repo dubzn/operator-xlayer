@@ -1356,6 +1356,20 @@ input:disabled {
   border: 1px solid rgba(173, 178, 225, 0.14);
 }
 
+.token-row-asset {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.token-row-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 6px 16px rgba(8, 8, 17, 0.24);
+}
+
 .token-row-meta {
   display: flex;
   flex-direction: column;
