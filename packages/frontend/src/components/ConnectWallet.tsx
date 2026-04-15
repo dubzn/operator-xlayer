@@ -28,7 +28,14 @@ export function ConnectWallet({ address, connecting, error, onConnect, onDisconn
   return (
     <div className="wallet-connect">
       <button onClick={onConnect} disabled={connecting} className="btn btn-primary btn-wide">
-        {connecting ? "Connecting..." : "Connect Wallet"}
+        {connecting ? (
+          "Connecting..."
+        ) : (
+          <>
+            <img src="/logos/metamask.png" alt="" className="btn-wallet-logo" />
+            Connect with MetaMask
+          </>
+        )}
       </button>
       {error && <p className="error wallet-error">{error}</p>}
     </div>

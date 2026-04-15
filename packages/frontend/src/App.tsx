@@ -1,18 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { Address } from "viem";
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useWallet } from "./hooks/useWallet";
-import { useVaultData } from "./hooks/useVaultData";
-import { useVaultHistory } from "./hooks/useVaultHistory";
-import { ConnectWallet } from "./components/ConnectWallet";
-import { VaultSelector } from "./components/VaultSelector";
-import { CreateVault } from "./components/CreateVault";
-import { VaultDashboard } from "./components/VaultDashboard";
-import DocumentationPage from "./components/DocumentationPage";
+import { AppNav } from "./components/AppNav";
+import { PublicNav } from "./components/PublicNav";
+import { WalletUtilityBar } from "./components/WalletUtilityBar";
+import { AppFooter } from "./components/AppFooter";
 import DarkVeil from "./components/DarkVeil";
+import { HomePage } from "./pages/HomePage";
+import { DocsPage } from "./pages/DocsPage";
+import { VaultsPage } from "./pages/VaultsPage";
+import { NewVaultPage } from "./pages/NewVaultPage";
+import { VaultDetailPage } from "./pages/VaultDetailPage";
 import "./App.css";
 
 const GLOW_SURFACE_SELECTOR = ".app-header, .liquid-panel, .glass-card";
-const DOCS_HASH_PREFIX = "#docs";
 
 function LiquidGlassDefs() {
   return (
@@ -75,43 +77,34 @@ function useBorderGlowSurfaces() {
   }, []);
 }
 
+function ProtectedRoute({ address }: { address: Address | null }) {
+  if (!address) {
+    return <Navigate to="/home" replace />;
+  }
+
+  return <Outlet />;
+}
+
 function App() {
   useBorderGlowSurfaces();
 
   const { address, walletClient, publicClient, connect, disconnect, connecting, error } =
     useWallet();
-  const [selectedVault, setSelectedVault] = useState<Address | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [view, setView] = useState<"app" | "docs">(() =>
-    window.location.hash.startsWith(DOCS_HASH_PREFIX) ? "docs" : "app"
-  );
-  const { data: vaultData, loading, refresh } = useVaultData(publicClient, selectedVault);
-  const { events: vaultEvents, loading: historyLoading } = useVaultHistory(selectedVault);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const showAuthenticatedShell = Boolean(address) && location.pathname !== "/home";
 
-  const isOwner =
-    vaultData && address
-      ? vaultData.owner.toLowerCase() === address.toLowerCase()
-      : false;
-
-  useEffect(() => {
-    const syncViewWithHash = () => {
-      setView(window.location.hash.startsWith(DOCS_HASH_PREFIX) ? "docs" : "app");
-    };
-
-    window.addEventListener("hashchange", syncViewWithHash);
-    return () => window.removeEventListener("hashchange", syncViewWithHash);
-  }, []);
-
-  const openDocs = (section = "overview") => {
-    window.location.hash = `#docs-${section}`;
+  const handleConnect = async () => {
+    const connectedAddress = await connect();
+    if (connectedAddress) {
+      navigate("/vaults");
+    }
   };
 
-  const closeDocs = () => {
-    window.location.hash = "";
+  const handleDisconnect = () => {
+    disconnect();
+    navigate("/home");
   };
-
-  const mainClassName =
-    view === "docs" ? "app-main app-main-docs" : `app-main ${!address ? "app-main-landing" : ""}`;
 
   return (
     <div className="app-shell">
@@ -133,168 +126,76 @@ function App() {
       <div className="app-noise" />
 
       <div className="app-frame">
-        {address && view !== "docs" && (
-          <header className="app-header liquid-panel liquid-panel-soft">
-            <div className="brand-block">
-              <div className="brand-heading">
-                <span className="display-text brand-mark">X402 Operator</span>
-                <span className="network-badge">X Layer</span>
-              </div>
-              <p className="header-subtitle">
-                Premium operator shell for safe delegated vault execution.
-              </p>
-            </div>
-
-            <div className="header-actions">
-              <button className="btn btn-ghost" onClick={() => openDocs()}>
-                Documentation
-              </button>
-
-              <ConnectWallet
-                address={address}
-                connecting={connecting}
-                error={error}
-                onConnect={connect}
-                onDisconnect={() => {
-                  disconnect();
-                  setSelectedVault(null);
-                  setShowCreate(false);
-                }}
-              />
-            </div>
-          </header>
+        {showAuthenticatedShell ? (
+          <div className="shell-top-row">
+            <AppNav />
+            {address ? <WalletUtilityBar address={address} onDisconnect={handleDisconnect} /> : null}
+          </div>
+        ) : (
+          <PublicNav />
         )}
 
-        <main className={mainClassName}>
-          {view === "docs" ? (
-            <DocumentationPage
-              isConnected={Boolean(address)}
-              onBack={closeDocs}
-              onConnect={connect}
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={<Navigate to={address ? "/vaults" : "/home"} replace />} />
+            <Route
+              path="/home"
+              element={
+                address ? (
+                  <Navigate to="/vaults" replace />
+                ) : (
+                  <HomePage
+                    address={address}
+                    connecting={connecting}
+                    error={error}
+                    onConnect={handleConnect}
+                  />
+                )
+              }
             />
-          ) : !address ? (
-            <section className="landing-screen" aria-label="X402 Operator landing">
-              <nav className="landing-nav glass-card" aria-label="Landing navigation">
-                <div className="landing-brand">
-                  <img className="landing-brand-logo" src="/logo.png" alt="X Layer" />
-                </div>
-                <span className="landing-brand-name">X402 Operator</span>
-              </nav>
-
-              <div className="hero-stage">
-                <div className="hero-stack">
-                  <p className="hero-pill">Build X Hackathon</p>
-                  <h1 className="display-text hero-title">
-                    Delegated execution without surrendering custody.
-                  </h1>
-                  <p className="hero-text">
-                    Agents request swaps. Vaults enforce policy. Operators get paid per job.
-                  </p>
-                  <div className="hero-actions">
-                    <button onClick={connect} className="btn btn-primary btn-xl hero-cta">
-                      {connecting ? "Connecting..." : "Connect Wallet"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xl hero-cta hero-docs"
-                      onClick={() => openDocs()}
-                    >
-                      Documentation
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <footer className="landing-footer">
-                <span>Policy-enforced execution</span>
-                <span>x402 metering</span>
-                <span>Onchain receipts</span>
-              </footer>
-            </section>
-          ) : (
-            <>
-              <section className="control-strip">
-                <VaultSelector
-                  publicClient={publicClient}
+            <Route
+              path="/docs"
+              element={
+                <DocsPage
                   address={address}
-                  selectedVault={selectedVault}
-                  onSelect={(vault) => {
-                    setSelectedVault(vault);
-                    setShowCreate(false);
-                  }}
+                  connecting={connecting}
+                  error={error}
+                  onConnect={handleConnect}
                 />
+              }
+            />
 
-                <div className="control-actions liquid-panel liquid-panel-soft">
-                  <div>
-                    <p className="eyebrow">Vault builder</p>
-                    <h3 className="display-text">Create a new shell</h3>
-                    <p className="muted-copy">
-                      Launch a new vault without leaving the workspace.
-                    </p>
-                  </div>
-                  <button
-                    className={`btn ${showCreate ? "btn-ghost" : "btn-primary"} btn-wide`}
-                    onClick={() => {
-                      setShowCreate(!showCreate);
-                      if (!showCreate) {
-                        setSelectedVault(null);
-                      }
-                    }}
-                  >
-                    {showCreate ? "Close Builder" : "New Vault"}
-                  </button>
-                </div>
-              </section>
+            <Route element={<ProtectedRoute address={address} />}>
+              <Route
+                path="/vaults"
+                element={<VaultsPage publicClient={publicClient} address={address!} />}
+              />
+              <Route
+                path="/vaults/new"
+                element={
+                  <NewVaultPage
+                    walletClient={walletClient}
+                    publicClient={publicClient}
+                    address={address}
+                  />
+                }
+              />
+              <Route
+                path="/vaults/:vaultId"
+                element={
+                  <VaultDetailPage
+                    walletClient={walletClient}
+                    publicClient={publicClient}
+                    address={address}
+                  />
+                }
+              />
+            </Route>
 
-              {showCreate && walletClient && (
-                <CreateVault
-                  walletClient={walletClient}
-                  publicClient={publicClient}
-                  address={address}
-                  onVaultCreated={(vault) => {
-                    setSelectedVault(vault);
-                    setShowCreate(false);
-                  }}
-                />
-              )}
-
-              {selectedVault && loading && !vaultData && (
-                <section className="empty-state liquid-panel">
-                  <p className="eyebrow">Loading vault</p>
-                  <h2 className="display-text">Syncing live vault state</h2>
-                  <p className="muted-copy">
-                    Pulling balances, policy guards, and indexed activity from X Layer.
-                  </p>
-                </section>
-              )}
-
-              {selectedVault && vaultData && (
-                <VaultDashboard
-                  vault={selectedVault}
-                  data={vaultData}
-                  isOwner={isOwner}
-                  walletClient={walletClient}
-                  publicClient={publicClient}
-                  address={address}
-                  onRefresh={refresh}
-                  events={vaultEvents}
-                  historyLoading={historyLoading}
-                />
-              )}
-
-              {!selectedVault && !showCreate && (
-                <section className="empty-state liquid-panel">
-                  <p className="eyebrow">Vault workspace</p>
-                  <h2 className="display-text">Select a vault to open the cockpit</h2>
-                  <p className="muted-copy">
-                    Choose one of your deployed vaults or create a new one from the control
-                    strip above.
-                  </p>
-                </section>
-              )}
-            </>
-          )}
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
         </main>
+        <AppFooter />
       </div>
     </div>
   );

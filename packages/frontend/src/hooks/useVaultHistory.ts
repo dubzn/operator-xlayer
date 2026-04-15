@@ -17,7 +17,12 @@ export function useVaultHistory(vaultAddress: Address | null) {
   const [loading, setLoading] = useState(false);
 
   const fetchHistory = useCallback(async () => {
-    if (!vaultAddress) return;
+    if (!vaultAddress) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       // Register vault for watching (idempotent)
@@ -43,10 +48,15 @@ export function useVaultHistory(vaultAddress: Address | null) {
   }, [vaultAddress]);
 
   useEffect(() => {
+    if (!vaultAddress) {
+      setEvents([]);
+      return undefined;
+    }
+
     fetchHistory();
     const interval = setInterval(fetchHistory, 10_000);
     return () => clearInterval(interval);
-  }, [fetchHistory]);
+  }, [fetchHistory, vaultAddress]);
 
   return { events, loading, refresh: fetchHistory };
 }

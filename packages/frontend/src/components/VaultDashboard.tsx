@@ -6,7 +6,7 @@ import { VaultHistory } from "./VaultHistory";
 import { OPERATOR_VAULT_ABI, ERC20_ABI, ADDRESSES } from "../config/contracts";
 
 type VaultTab = "graph" | "policies" | "configuration";
-type Timeframe = "24h" | "7d" | "1M" | "3M" | "YTD" | "1Y" | "Max";
+type Timeframe = "24h" | "7d" | "1M" | "1Y" | "Max";
 type ConfigSection = "controllers" | "tokens" | "emergency";
 
 interface Props {
@@ -27,7 +27,7 @@ interface ChartPoint {
   volume: number;
 }
 
-const TIMEFRAMES: Timeframe[] = ["24h", "7d", "1M", "3M", "YTD", "1Y", "Max"];
+const TIMEFRAMES: Timeframe[] = ["24h", "7d", "1M", "1Y", "Max"];
 const VAULT_TABS: VaultTab[] = ["graph", "policies", "configuration"];
 
 function formatUsdFromBigInt(amount: bigint): string {
@@ -96,14 +96,6 @@ function buildLabels(timeframe: Timeframe, points: number): string[] {
     return Array.from({ length: points }, (_, index) => `W${index + 1}`);
   }
 
-  if (timeframe === "3M") {
-    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"];
-  }
-
-  if (timeframe === "YTD") {
-    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"];
-  }
-
   if (timeframe === "1Y") {
     return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   }
@@ -116,8 +108,6 @@ function generateChartSeries(vault: string, currentValue: number, timeframe: Tim
     "24h": { points: 24, volatility: 0.016, waveCycles: 2.6 },
     "7d": { points: 7, volatility: 0.022, waveCycles: 1.8 },
     "1M": { points: 6, volatility: 0.03, waveCycles: 1.6 },
-    "3M": { points: 9, volatility: 0.038, waveCycles: 1.35 },
-    YTD: { points: 8, volatility: 0.044, waveCycles: 1.15 },
     "1Y": { points: 12, volatility: 0.055, waveCycles: 1.05 },
     Max: { points: 6, volatility: 0.08, waveCycles: 0.9 },
   }[timeframe];
@@ -397,18 +387,7 @@ export function VaultDashboard({
   return (
     <>
       <section className="vault-scene">
-        <aside className="vault-summary-rail">
-          <div className="vault-summary-panel liquid-panel">
-            <div className="vault-summary-top">
-              <div>
-                <p className="eyebrow">Selected vault</p>
-                <h2 className="display-text vault-name">{vaultName}</h2>
-              </div>
-              <button className="vault-copy" onClick={copyVaultAddress} title="Copy vault address">
-                {copied ? "Copied" : shortAddr(vault)}
-              </button>
-            </div>
-
+        <div className="vault-summary-panel liquid-panel">
             <div className="vault-summary-main">
               <p className="summary-label">Net value</p>
               <div className="summary-value">{formatUsd(netValue)}</div>
@@ -443,10 +422,7 @@ export function VaultDashboard({
                 Deposit
               </button>
             ) : null}
-          </div>
-
-          <VaultHistory events={events} loading={historyLoading} />
-        </aside>
+        </div>
 
         <section className="vault-primary-panel liquid-panel">
           <div className="vault-primary-header">
@@ -482,14 +458,17 @@ export function VaultDashboard({
           {activeTab === "graph" && (
             <div className="graph-panel">
               <div className="graph-meta">
-                <div>
-                  <p className="eyebrow">Graph</p>
-                  <h3 className="display-text">Net vault value in USD</h3>
-                </div>
-                <p className="graph-note">
-                  Historical series is a deterministic presentation layer based on the live vault
-                  value until a dedicated net-value backend lands.
-                </p>
+                <p className="eyebrow">Net vault value · USD</p>
+                <span className="graph-info" tabIndex={0} aria-label="Chart information">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <circle cx="7" cy="7" r="6.25" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M5.75 5.5C5.75 4.81 6.31 4.25 7 4.25s1.25.56 1.25 1.25c0 .6-.38 1-.75 1.3-.38.3-.75.67-.75 1.2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                    <circle cx="7" cy="9.75" r="0.7" fill="currentColor" />
+                  </svg>
+                  <span className="graph-info-tip" role="tooltip">
+                    Historical series is a deterministic presentation layer based on the live vault value until a dedicated net-value indexer lands.
+                  </span>
+                </span>
               </div>
 
               <div className="chart-shell">
@@ -1034,6 +1013,33 @@ export function VaultDashboard({
             </div>
           )}
         </section>
+
+        <section className="vault-tokens-panel liquid-panel liquid-panel-soft">
+          <div className="history-panel-header">
+            <div>
+              <p className="eyebrow">Holdings</p>
+              <h3 className="display-text">Tokens</h3>
+            </div>
+          </div>
+          <div className="token-rows">
+            {[
+              { symbol: "USDT", balance: data.balanceUsdt, name: "Tether USD" },
+              { symbol: "USDC", balance: data.balanceUsdc, name: "USD Coin" },
+            ].map((row) => (
+              <div key={row.symbol} className="token-row">
+                <span className={`token-badge token-badge-${row.symbol.toLowerCase()}`}>
+                  {row.symbol}
+                </span>
+                <div className="token-row-meta">
+                  <strong className="token-row-amount">{formatUsd(Number(row.balance) / 1e6)}</strong>
+                  <span className="token-row-sub">{row.name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <VaultHistory events={events} loading={historyLoading} />
       </section>
 
       {error ? <p className="error dashboard-error">{error}</p> : null}

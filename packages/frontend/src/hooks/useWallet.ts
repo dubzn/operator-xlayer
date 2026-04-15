@@ -90,8 +90,10 @@ export function useWallet() {
 
       setAddress(accounts[0]);
       setWalletClient(client);
+      return accounts[0];
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
+      return null;
     } finally {
       setConnecting(false);
     }
