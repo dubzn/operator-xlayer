@@ -1,4 +1,4 @@
-# X402 Operator
+# X402 Operator - X Layer
 
 > The secure execution rail for agents on X Layer.
 
