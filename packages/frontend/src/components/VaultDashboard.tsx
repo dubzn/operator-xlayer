@@ -4,6 +4,7 @@ import type { IndexedEvent } from "../hooks/useVaultHistory";
 import type { VaultData } from "../hooks/useVaultData";
 import { VaultHistory } from "./VaultHistory";
 import { OPERATOR_VAULT_ABI, ERC20_ABI, ADDRESSES } from "../config/contracts";
+import { tokenLabel, tokenIcon, tokenName } from "../config/tokens";
 
 type VaultTab = "graph" | "policies" | "configuration";
 type Timeframe = "24h" | "7d" | "1M" | "1Y" | "Max";
@@ -49,13 +50,6 @@ function formatUsd(value: number): string {
 
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
-function tokenLabel(addr: string) {
-  const lower = addr.toLowerCase();
-  if (lower === ADDRESSES.usdt.toLowerCase()) return "USDT";
-  if (lower === ADDRESSES.usdc.toLowerCase()) return "USDC";
-  return shortAddr(addr);
 }
 
 function formatCooldown(seconds: bigint): string {
@@ -179,11 +173,6 @@ function buildChartGeometry(points: ChartPoint[]) {
     safeMin,
     safeMax,
   };
-}
-
-function deriveVaultName(baseToken: string) {
-  const token = tokenLabel(baseToken);
-  return `${token} Reserve Vault`;
 }
 
 function collectAddresses(
@@ -362,6 +351,10 @@ export function VaultDashboard({
   const lastPoint = chartSeries[chartSeries.length - 1]?.value ?? netValue;
   const deltaPercent = firstPoint === 0 ? 0 : ((lastPoint - firstPoint) / firstPoint) * 100;
   const deltaPositive = deltaPercent >= 0;
+  const holdings = [
+    { address: ADDRESSES.usdt, balance: data.balanceUsdt },
+    { address: ADDRESSES.usdc, balance: data.balanceUsdc },
+  ];
 
   const depositParsed = parseFloat(depositAmount);
   const canSubmitDeposit =
@@ -389,7 +382,10 @@ export function VaultDashboard({
             <div className="summary-stats">
               <div className="summary-stat">
                 <span className="field-label">Base</span>
-                <strong>{tokenLabel(data.baseToken)}</strong>
+                <strong className="token-with-icon">
+                  {tokenIcon(data.baseToken) && <img src={tokenIcon(data.baseToken)} alt="" className="token-icon" />}
+                  {tokenLabel(data.baseToken)}
+                </strong>
               </div>
               <div className="summary-stat">
                 <span className="field-label">Status</span>
@@ -836,7 +832,7 @@ export function VaultDashboard({
                         {allowedInputTokens.map((token) => (
                           <div key={token} className="config-list-item">
                             <div className="config-list-info">
-                              <span className="config-list-badge">{tokenLabel(token)}</span>
+                              <span className="config-list-badge">{tokenIcon(token) && <img src={tokenIcon(token)} alt="" className="token-icon-sm" />}{tokenLabel(token)}</span>
                               <span className="config-list-full">{token}</span>
                             </div>
                             {isOwner && walletClient && (
@@ -907,7 +903,7 @@ export function VaultDashboard({
                         {allowedTokens.map((token) => (
                           <div key={token} className="config-list-item">
                             <div className="config-list-info">
-                              <span className="config-list-badge">{tokenLabel(token)}</span>
+                              <span className="config-list-badge">{tokenIcon(token) && <img src={tokenIcon(token)} alt="" className="token-icon-sm" />}{tokenLabel(token)}</span>
                               <span className="config-list-full">{token}</span>
                             </div>
                             {isOwner && walletClient && (
@@ -1010,20 +1006,22 @@ export function VaultDashboard({
             </div>
           </div>
           <div className="token-rows">
-            {[
-              { symbol: "USDT", balance: data.balanceUsdt, name: "Tether USD" },
-              { symbol: "USDC", balance: data.balanceUsdc, name: "USD Coin" },
-            ].map((row) => (
-              <div key={row.symbol} className="token-row">
-                <span className={`token-badge token-badge-${row.symbol.toLowerCase()}`}>
-                  {row.symbol}
-                </span>
-                <div className="token-row-meta">
-                  <strong className="token-row-amount">{formatUsd(Number(row.balance) / 1e6)}</strong>
-                  <span className="token-row-sub">{row.name}</span>
+            {holdings.map((row) => {
+              const name = tokenName(row.address);
+              const icon = tokenIcon(row.address);
+
+              return (
+                <div key={row.address} className="token-row">
+                  <div className="token-row-asset">
+                    {icon ? <img src={icon} alt="" className="token-row-icon" /> : null}
+                  </div>
+                  <div className="token-row-meta">
+                    <strong className="token-row-amount">{formatUsd(Number(row.balance) / 1e6)}</strong>
+                    <span className="token-row-sub">{name}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 

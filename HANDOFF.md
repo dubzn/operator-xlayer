@@ -203,9 +203,7 @@ Traten esas direcciones como referencia historica. Para usar el flujo actual de 
 - `SWAP_ADAPTER_ADDRESS`
 - config del frontend
 
-Mas detalle en:
-
-- [docs/mainnet-deployment.md](/Users/damianalejandropinones/Documents/temp/agentic/operator-xlayer/docs/mainnet-deployment.md)
+Mas detalle en el `README.md` raiz, que ahora concentra deployment, mainnet constants y narrativa del hackathon.
 
 ## Como correr
 
