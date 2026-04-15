@@ -6,6 +6,7 @@ import { VaultHistory } from "./VaultHistory";
 import { OPERATOR_VAULT_ABI, ERC20_ABI, ADDRESSES } from "../config/contracts";
 import { getTokenMeta, tokenLabel, tokenIcon, tokenName } from "../config/tokens";
 import { formatMoneyInput, moneyInputToNumber, moneyInputToUnits, unitsToMoneyInput } from "../utils/moneyInput";
+import { isDemoMode } from "../demo/demoData";
 
 type VaultTab = "graph" | "policies" | "configuration";
 type Timeframe = "24h" | "7d" | "1M" | "1Y" | "Max";
@@ -264,6 +265,15 @@ export function VaultDashboard({
   const policyFormRef = useRef<HTMLDivElement>(null);
 
   const loadLists = useCallback(async () => {
+    if (isDemoMode()) {
+      // In demo mode, derive lists from events
+      const demoLists = collectAddresses(events, data.baseToken);
+      setControllers(demoLists.controllers);
+      setAllowedInputTokens(demoLists.allowedInputTokens);
+      setAllowedTokens(demoLists.allowedTokens);
+      return;
+    }
+
     try {
       const [controllersResult, inputTokensResult, outputTokensResult] = await Promise.all([
         publicClient.readContract({

@@ -14,6 +14,7 @@ export const ADDRESSES = {
   approvalTarget: "0x8b773D83bc66Be128c60e07E17C8901f7a64F000" as `0x${string}`,
   usdt: "0x1E4a5963aBFD975d8c9021ce480b42188849D41d" as `0x${string}`,
   usdc: "0x74b7F16337b8972027F6196A17a631aC6dE26d22" as `0x${string}`,
+  wokb: "0xe538905cf8410324e03a5A23C1c177a474D59b2b" as `0x${string}`,
 } as const;
 
 export const VAULT_FACTORY_ABI = [

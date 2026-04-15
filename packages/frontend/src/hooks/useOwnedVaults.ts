@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Address, PublicClient } from "viem";
 import { ADDRESSES, VAULT_FACTORY_ABI } from "../config/contracts";
+import { isDemoMode, DEMO_VAULTS } from "../demo/demoData";
 
 export function useOwnedVaults(publicClient: PublicClient, owner: Address | null) {
-  const [vaults, setVaults] = useState<Address[]>([]);
+  const demo = isDemoMode();
+  const [vaults, setVaults] = useState<Address[]>(demo ? DEMO_VAULTS : []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasData = useRef(false);
+  const hasData = useRef(demo);
 
   const refresh = useCallback(async () => {
+    if (demo) return;
     if (!owner) {
       setVaults([]);
       setLoading(false);

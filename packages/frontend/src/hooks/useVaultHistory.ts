@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Address } from "viem";
+import { isDemoMode, getDemoEvents, subscribeDemoUpdates } from "../demo/demoData";
 
 const BACKEND_URL = "http://localhost:3000";
 
@@ -13,10 +14,30 @@ export interface IndexedEvent {
 }
 
 export function useVaultHistory(vaultAddress: Address | null) {
-  const [events, setEvents] = useState<IndexedEvent[]>([]);
+  const demo = isDemoMode();
+  const [events, setEvents] = useState<IndexedEvent[]>(
+    demo && vaultAddress ? getDemoEvents(vaultAddress) : []
+  );
   const [loading, setLoading] = useState(false);
 
+  // In demo mode, subscribe to live updates from Ctrl+K
+  useEffect(() => {
+    if (!demo || !vaultAddress) return undefined;
+
+    setEvents(getDemoEvents(vaultAddress));
+
+    const unsub = subscribeDemoUpdates(() => {
+      setEvents(getDemoEvents(vaultAddress));
+    });
+    return unsub;
+  }, [demo, vaultAddress]);
+
   const fetchHistory = useCallback(async () => {
+    if (demo) {
+      if (vaultAddress) setEvents(getDemoEvents(vaultAddress));
+      return;
+    }
+
     if (!vaultAddress) {
       setEvents([]);
       setLoading(false);
@@ -45,9 +66,11 @@ export function useVaultHistory(vaultAddress: Address | null) {
     } finally {
       setLoading(false);
     }
-  }, [vaultAddress]);
+  }, [demo, vaultAddress]);
 
   useEffect(() => {
+    if (demo) return undefined;
+
     if (!vaultAddress) {
       setEvents([]);
       return undefined;
@@ -56,7 +79,7 @@ export function useVaultHistory(vaultAddress: Address | null) {
     fetchHistory();
     const interval = setInterval(fetchHistory, 10_000);
     return () => clearInterval(interval);
-  }, [fetchHistory, vaultAddress]);
+  }, [demo, fetchHistory, vaultAddress]);
 
   return { events, loading, refresh: fetchHistory };
 }

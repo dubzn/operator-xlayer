@@ -24,66 +24,42 @@ const TOKEN_REGISTRY: Record<string, TokenMeta> = {
     icon: "/tokens/usdc.png",
   },
 
-  // --- Celo top 10 tokens ---
-  "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e": {
-    symbol: "USDT",
-    name: "Tether USD (Celo)",
+  // --- X Layer top tokens ---
+  "0x779ded0c9e1022225f8e0630b35a9b54be713736": {
+    symbol: "USDT0",
+    name: "USD₮0",
     decimals: 6,
     icon: "/tokens/usdt.png",
   },
-  "0xceba9300f2b948710d2653dd7b07f33a8b32118c": {
-    symbol: "USDC",
-    name: "USDC (Celo)",
+  "0x4ae46a509f6b1d9056937ba4500cb143933d2dc8": {
+    symbol: "USDG",
+    name: "Global Dollar",
     decimals: 6,
-    icon: "/tokens/usdc.png",
+    icon: "/tokens/usdg.png",
   },
-  "0xd07294e6e917e07dfdcee882dd1e2565085c2ae0": {
-    symbol: "LINK",
-    name: "ChainLink Token",
+  "0xe538905cf8410324e03a5a23c1c177a474d59b2b": {
+    symbol: "WOKB",
+    name: "Wrapped OKB",
     decimals: 18,
-    icon: "/tokens/link.png",
+    icon: "/tokens/wokb.png",
   },
-  "0xaf37e8b6c9ed7f6318979f56fc287d76c30847ff": {
-    symbol: "XAUt",
-    name: "Tether Gold",
-    decimals: 6,
-    icon: "/tokens/xaut.png",
-  },
-  "0xd15ec721c2a896512ad29c671997dd68f9593226": {
-    symbol: "SUSHI",
-    name: "Sushi",
+  "0xb7c00000bcdeef966b20b3d884b98e64d2b06b4f": {
+    symbol: "XBTC",
+    name: "OKX Wrapped BTC",
     decimals: 18,
-    icon: "/tokens/sushi.png",
+    icon: "/tokens/xbtc.png",
   },
-  "0x471ece3750da237f93b8e339c536989b8978a438": {
-    symbol: "CELO",
-    name: "Celo",
+  "0xe7b000003a45145decf8a28fc755ad5ec5ea025a": {
+    symbol: "XETH",
+    name: "OKX Wrapped ETH",
     decimals: 18,
-    icon: "/tokens/celo.png",
+    icon: "/tokens/xeth.png",
   },
-  "0xfecb3f7c54e2caae9dc6ac9060a822d47e053760": {
-    symbol: "BRLA",
-    name: "BRLA Digital",
+  "0x505000008de8748dbd4422ff4687a4fc9beba15b": {
+    symbol: "XSOL",
+    name: "OKX Wrapped SOL",
     decimals: 18,
-    icon: "/tokens/brla.png",
-  },
-  "0x765de816845861e75a25fca122bb6898b8b1282a": {
-    symbol: "cUSD",
-    name: "Celo Dollar",
-    decimals: 18,
-    icon: "/tokens/cusd.png",
-  },
-  "0xb9c8f0d3254007ee4b98970b94544e473cd610ec": {
-    symbol: "MAI",
-    name: "MAI (Mimatic)",
-    decimals: 18,
-    icon: "/tokens/mai.png",
-  },
-  "0x9995cc8f20db5896943afc8ee0ba463259c931ed": {
-    symbol: "ETHIX",
-    name: "Ethix",
-    decimals: 18,
-    icon: "/tokens/ethix.png",
+    icon: "/tokens/xsol.png",
   },
 };
 

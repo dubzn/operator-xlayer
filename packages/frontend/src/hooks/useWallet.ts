@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   createWalletClient,
   createPublicClient,
@@ -9,6 +9,7 @@ import {
   type Address,
 } from "viem";
 import { CHAIN_ID, RPC_URL } from "../config/contracts";
+import { DEMO_WALLET, isDemoMode } from "../demo/demoData";
 
 const xlayer = {
   id: CHAIN_ID,
@@ -39,13 +40,27 @@ function parseAccounts(value: unknown): Address[] {
 }
 
 export function useWallet() {
-  const [address, setAddress] = useState<Address | null>(null);
+  const demo = isDemoMode();
+  const [address, setAddress] = useState<Address | null>(demo ? DEMO_WALLET! : null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [publicClient] = useState<PublicClient>(
     createPublicClient({ chain: xlayer, transport: http(RPC_URL) })
   );
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-connect in demo mode — create a dummy wallet client
+  useEffect(() => {
+    if (demo && !walletClient) {
+      const dummyTransport = http(RPC_URL);
+      const client = createWalletClient({
+        chain: xlayer,
+        transport: dummyTransport,
+        account: DEMO_WALLET!,
+      });
+      setWalletClient(client);
+    }
+  }, [demo, walletClient]);
 
   const connect = useCallback(async () => {
     setConnecting(true);

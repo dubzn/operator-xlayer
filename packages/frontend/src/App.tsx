@@ -10,6 +10,7 @@ import { DocsPage } from "./pages/DocsPage";
 import { VaultsPage } from "./pages/VaultsPage";
 import { NewVaultPage } from "./pages/NewVaultPage";
 import { VaultDetailPage } from "./pages/VaultDetailPage";
+import { isDemoMode, simulateNewOperation } from "./demo/demoData";
 import "./App.css";
 
 const GLOW_SURFACE_SELECTOR = ".app-header, .liquid-panel, .glass-card";
@@ -83,8 +84,25 @@ function ProtectedRoute({ address }: { address: Address | null }) {
   return <Outlet />;
 }
 
+function useDemoKeyboard() {
+  useEffect(() => {
+    if (!isDemoMode()) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "k") {
+        event.preventDefault();
+        simulateNewOperation();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+}
+
 function App() {
   useBorderGlowSurfaces();
+  useDemoKeyboard();
 
   const { address, walletClient, publicClient, connect, disconnect, connecting, error } =
     useWallet();

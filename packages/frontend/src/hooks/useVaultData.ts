@@ -5,6 +5,7 @@ import {
   ERC20_ABI,
   ADDRESSES,
 } from "../config/contracts";
+import { isDemoMode, getDemoVaultDataLive, subscribeDemoUpdates } from "../demo/demoData";
 
 export interface VaultData {
   owner: Address;
@@ -26,12 +27,32 @@ export function useVaultData(
   publicClient: PublicClient,
   vaultAddress: Address | null
 ) {
-  const [data, setData] = useState<VaultData | null>(null);
+  const demo = isDemoMode();
+  const [data, setData] = useState<VaultData | null>(
+    demo && vaultAddress ? getDemoVaultDataLive(vaultAddress) : null
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasData = useRef(false);
+  const hasData = useRef(demo && Boolean(vaultAddress));
+
+  // In demo mode, subscribe to live updates from Ctrl+K
+  useEffect(() => {
+    if (!demo || !vaultAddress) return undefined;
+
+    setData(getDemoVaultDataLive(vaultAddress));
+
+    const unsub = subscribeDemoUpdates(() => {
+      setData(getDemoVaultDataLive(vaultAddress));
+    });
+    return unsub;
+  }, [demo, vaultAddress]);
 
   const refresh = useCallback(async () => {
+    if (demo) {
+      if (vaultAddress) setData(getDemoVaultDataLive(vaultAddress));
+      return;
+    }
+
     if (!vaultAddress) {
       setData(null);
       setLoading(false);
@@ -117,9 +138,11 @@ export function useVaultData(
     } finally {
       setLoading(false);
     }
-  }, [publicClient, vaultAddress]);
+  }, [demo, publicClient, vaultAddress]);
 
   useEffect(() => {
+    if (demo) return undefined;
+
     hasData.current = false;
 
     if (!vaultAddress) {
@@ -131,7 +154,7 @@ export function useVaultData(
     refresh();
     const interval = setInterval(refresh, 10_000);
     return () => clearInterval(interval);
-  }, [refresh, vaultAddress]);
+  }, [demo, refresh, vaultAddress]);
 
   return { data, loading, error, refresh };
 }
