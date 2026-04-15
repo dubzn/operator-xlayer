@@ -31,7 +31,7 @@ export function AppNav({ address, onDisconnect, onConnect, connecting }: Props) 
             to="/docs"
             className={({ isActive }) => `shell-nav-link ${isActive ? "active" : ""}`}
           >
-            Docs
+            Documentation
           </NavLink>
         </div>
 

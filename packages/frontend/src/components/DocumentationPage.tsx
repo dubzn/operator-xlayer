@@ -13,48 +13,50 @@ interface DocumentationPageProps {
   isConnected: boolean;
 }
 
+const HACKATHON_URL = "https://web3.okx.com/es-la/xlayer/build-x-hackathon";
+
 const DOC_SECTIONS = [
   {
-    id: "docs-overview",
+    id: "docs-pitch",
     label: "Overview",
-    eyebrow: "Protocol thesis",
+    eyebrow: "Documentation",
     summary:
-      "What X402 Operator is, why the scope is intentionally narrow, and why that is an advantage for the hackathon.",
+      "High-level context: what X402 Operator is, why the wedge matters, and how the system is positioned for Build X.",
+  },
+  {
+    id: "docs-live",
+    label: "What Is Live",
+    eyebrow: "Honest scope",
+    summary:
+      "What the repo already ships today, what can be verified directly, and what we are intentionally not claiming yet.",
+  },
+  {
+    id: "docs-demo",
+    label: "Demo",
+    eyebrow: "90-second path",
+    summary:
+      "The exact sequence that makes the product legible: preview, sign, x402 payment, onchain execution, and receipt.",
   },
   {
     id: "docs-architecture",
     label: "Architecture",
-    eyebrow: "System design",
+    eyebrow: "Trust boundaries",
     summary:
-      "Roles, trust boundaries, and the separation between owner, controller, operator, and contracts.",
-  },
-  {
-    id: "docs-flow",
-    label: "Execution Flow",
-    eyebrow: "Runtime loop",
-    summary:
-      "The full path from preview to x402 payment, execution submission, and receipt recording.",
-  },
-  {
-    id: "docs-contracts",
-    label: "Contracts",
-    eyebrow: "Onchain surface",
-    summary:
-      "How VaultFactory, OperatorVault, the OKX adapter, and the registry work together.",
+      "Roles, boundaries, and why the operator is useful without becoming a broad custodian.",
   },
   {
     id: "docs-mainnet",
     label: "Mainnet",
-    eyebrow: "Deployment constants",
+    eyebrow: "Proof surface",
     summary:
-      "Current X Layer addresses, network metadata, and the initial reference policy deployed from the repo.",
+      "Current X Layer constants, frontend-wired addresses, and the reference policy used for the demo path.",
   },
   {
     id: "docs-api",
-    label: "API + Intent",
+    label: "API",
     eyebrow: "Integration surface",
     summary:
-      "Typed endpoints, ExecutionIntent shape, preview payloads, and the formulas that bind quote to execution.",
+      "Typed endpoints, intent shape, preview semantics, and the formulas that tie quote to execution.",
   },
   {
     id: "docs-security",
@@ -66,31 +68,124 @@ const DOC_SECTIONS = [
   {
     id: "docs-faq",
     label: "FAQ",
-    eyebrow: "Judge questions",
+    eyebrow: "Common questions",
     summary:
-      "Fast answers to the questions a judge, integrator, or protocol partner is likely to ask first.",
+      "Short answers to the questions an integrator, contributor, or protocol partner is likely to ask first.",
   },
 ] as const;
 
 type DocSectionId = (typeof DOC_SECTIONS)[number]["id"];
 
-const DEFAULT_SECTION: DocSectionId = "docs-overview";
+const DEFAULT_SECTION: DocSectionId = "docs-pitch";
 
-const PROTOCOL_PILLARS = [
+const WIN_REASONS = [
   {
-    title: "Delegated execution without broad delegation",
+    title: "It solves a real agent problem",
     body:
-      "Controller agents decide when to trade, but they never receive a generic path to spend vault capital. The owner keeps policy authority and the vault enforces it onchain.",
+      "Most agent projects prove decision-making. We prove execution without broad wallet delegation. That is the uncomfortable layer between demos and real capital.",
   },
   {
-    title: "Execution-as-a-service priced with x402",
+    title: "It gives x402 a natural job",
     body:
-      "The operator is not a free relayer. The controller pays the execution fee over x402, which cleanly separates strategy capital from operator economics.",
+      "The operator charges per execution attempt, which makes sense when software consumes execution-as-a-service. The fee is separated cleanly from vault capital.",
   },
   {
-    title: "Preview-driven quote binding",
+    title: "It leaves an audit trail",
     body:
-      "The controller signs the final package returned by preview, including adapter, quote bounds, nonce, deadline, and executionHash. That tight binding is what makes the system legible and auditable.",
+      "Every successful execution can be checked through tx hash, receipt data, and operator track record instead of relying on backend-only claims.",
+  },
+] as const;
+
+const BUILD_X_FIT = [
+  {
+    title: "Agent-native",
+    body:
+      "The controller agent is the first-class caller. Humans configure the vault once; the agent decides when to act.",
+  },
+  {
+    title: "Full-stack on X Layer",
+    body:
+      "Contracts, backend, reference agent, frontend console, and current addresses are all shaped around X Layer mainnet.",
+  },
+  {
+    title: "Easy to understand",
+    body:
+      "The product can be understood in under two minutes because the trust boundaries are narrow and the runtime loop is typed and concrete.",
+  },
+] as const;
+
+const LIVE_NOW = [
+  {
+    title: "Contracts live in the repo",
+    body:
+      "VaultFactory, OperatorVault, OkxAggregatorSwapAdapter, and ExecutionRegistry are implemented and wired together around delegated swap execution.",
+  },
+  {
+    title: "Typed execution path",
+    body:
+      "Preview computes the signable package, the controller signs EIP-712, execute enforces x402, and the vault re-validates onchain.",
+  },
+  {
+    title: "Frontend and agent included",
+    body:
+      "The repo ships a vault console plus a reference controller agent so the full story can be shown end to end.",
+  },
+] as const;
+
+const VERIFIABLE_SURFACE = [
+  {
+    title: "What can be verified",
+    body:
+      "Current chain constants, current addresses, typed intent shape, route binding via executionHash, execution receipts, and the operator success counter.",
+  },
+  {
+    title: "What we are intentionally not claiming",
+    body:
+      "We are not claiming a universal DeFi automation layer, an open operator marketplace, or a finished reputation economy. Today we solve delegated swaps well.",
+  },
+  {
+    title: "Why narrow scope is a strength",
+    body:
+      "Build X rewards practical systems. A tight wedge is easier to trust, easier to demo, and harder to dismiss as a vague vision deck.",
+  },
+] as const;
+
+const DEMO_STEPS = [
+  {
+    step: "01",
+    title: "Frame the problem",
+    body:
+      "Explain the tradeoff: broad wallet delegation is dangerous, manual signing kills autonomy. This project creates the third option.",
+  },
+  {
+    step: "02",
+    title: "Show a funded vault",
+    body:
+      "Open the console, show the owner-controlled vault, show the authorized controller and operator, and make the policy surface visible.",
+  },
+  {
+    step: "03",
+    title: "Show preview and the exact intent",
+    body:
+      "Display the preview response, the quote-derived bounds, and the final EIP-712 ExecutionIntent that the controller signs.",
+  },
+  {
+    step: "04",
+    title: "Show the x402 gate",
+    body:
+      "Hit execute, surface HTTP 402, and show the fee payment as the monetization rail between the controller and the operator.",
+  },
+  {
+    step: "05",
+    title: "Show enforcement",
+    body:
+      "Explain that the backend validates early, but the vault still re-checks adapter, signer, nonce, pairs, caps, cooldown, and executionHash onchain.",
+  },
+  {
+    step: "06",
+    title: "Close on the receipt",
+    body:
+      "Show the tx hash, the registry receipt, and the operator success count update. End on accountability, not on marketing language.",
   },
 ] as const;
 
@@ -98,92 +193,46 @@ const ACTORS = [
   {
     title: "Vault owner",
     body:
-      "Deposits capital, sets policy, authorizes controllers, and can pause or withdraw. The owner is the policy source of truth, not the execution engine.",
+      "Deposits capital, sets the rules, authorizes controllers, and can pause or withdraw. The owner is the policy source of truth.",
   },
   {
     title: "Controller agent",
     body:
-      "Builds the ExecutionIntent, requests preview, signs the final payload, and pays the operator. It decides when to act but cannot bypass vault rules.",
+      "Builds the ExecutionIntent, requests preview, signs the final payload, and pays the operator fee. It decides when to act but cannot bypass vault rules.",
   },
   {
     title: "Operator backend",
     body:
-      "Runs preview and execute, validates signatures and policy snapshots, verifies x402 payment, packages calldata, and submits the final transaction.",
+      "Runs preview and execute, verifies signatures and payment, packages calldata, and submits the final transaction.",
   },
   {
     title: "Onchain contracts",
     body:
-      "OperatorVault, VaultFactory, OkxAggregatorSwapAdapter, and ExecutionRegistry form the hard trust boundary and the public audit surface.",
+      "VaultFactory deploys, OperatorVault enforces, the OKX adapter executes, and ExecutionRegistry stores the audit surface.",
   },
 ] as const;
 
-const FLOW_STEPS = [
+const BOUNDARIES = [
   {
-    step: "01",
-    title: "Owner deploys and funds a vault",
-    body:
-      "VaultFactory creates a new OperatorVault, auto-registers it in ExecutionRegistry, and wires the shared operator plus the default OKX swap adapter.",
+    title: "Preview boundary",
+    body: "The controller sees the exact package it is being asked to sign.",
   },
   {
-    step: "02",
-    title: "Policy is configured onchain",
-    body:
-      "The owner allowlists controllers, input tokens, output tokens, token pairs, and swap adapters, then sets limits for max trade size, daily volume, slippage, and cooldown.",
+    title: "Signature boundary",
+    body: "The operator only gets a valid action if the controller approved the final typed package.",
   },
   {
-    step: "03",
-    title: "Controller requests preview",
-    body:
-      "POST /preview reads the live vault state, fetches an OKX DEX quote, derives policyMinAmountOut, computes executionHash, and returns the exact signable package.",
+    title: "Payment boundary",
+    body: "x402 prices the service independently from the capital inside the vault.",
   },
   {
-    step: "04",
-    title: "Controller signs and pays",
-    body:
-      "The controller signs the EIP-712 intent and calls POST /execute. If unpaid, the backend returns HTTP 402. The controller then pays the fee and retries with paymentReference.",
-  },
-  {
-    step: "05",
-    title: "Backend re-validates and executes",
-    body:
-      "The backend checks the cached quote, validates signature and live policy, verifies payment, and submits vault.executeSwap using the cached routeData.",
-  },
-  {
-    step: "06",
-    title: "Vault enforces and records receipt",
-    body:
-      "OperatorVault re-checks adapter, signer, nonce, deadline, allowlists, volume, cooldown, executionHash, and slippage before updating accounting and writing the receipt.",
-  },
-] as const;
-
-const CONTRACTS = [
-  {
-    title: "OperatorVault",
-    surface: "Custody + policy engine",
-    body:
-      "Holds funds, stores the operator + controller allowlists, verifies the EIP-712 intent, enforces execution policy, delegates into the selected adapter, and records the receipt.",
-  },
-  {
-    title: "VaultFactory",
-    surface: "Vault deployer",
-    body:
-      "Creates new vaults directly from the frontend and auto-authorizes them in the registry so every new vault is immediately part of the auditable receipt system.",
-  },
-  {
-    title: "OkxAggregatorSwapAdapter",
-    surface: "Execution venue abstraction",
-    body:
-      "Approves tokenIn to the OKX approval target, calls the router with backend-provided calldata, and measures amountOut from tokenOut balance delta.",
-  },
-  {
-    title: "ExecutionRegistry",
-    surface: "Public receipts + track record",
-    body:
-      "Stores execution receipts keyed by jobId and increments operator successCount, giving judges and integrators a concrete audit surface instead of a backend-only claim.",
+    title: "Vault boundary",
+    body: "Even a paid and signed request still fails if the owner policy no longer allows it.",
   },
 ] as const;
 
 const NETWORK_FACTS = [
+  { label: "Arena", value: "Build X · X Layer Arena" },
   { label: "Network", value: "X Layer Mainnet" },
   { label: "Chain ID", value: String(CHAIN_ID) },
   { label: "RPC URL", value: RPC_URL },
@@ -195,32 +244,32 @@ const DEPLOYMENT_ADDRESSES = [
   {
     label: "ExecutionRegistry",
     value: ADDRESSES.registry,
-    note: "Current registry address referenced by the frontend config.",
+    note: "Current registry address wired into the frontend config.",
   },
   {
     label: "VaultFactory",
     value: ADDRESSES.factory,
-    note: "Factory wired into the frontend for vault creation.",
+    note: "Factory used by the frontend to deploy new vault shells.",
   },
   {
     label: "OKX Swap Adapter",
     value: ADDRESSES.swapAdapter,
-    note: "Adapter deployed in the latest mainnet artifact and used by swap-v2.",
+    note: "Swap adapter address used by the current delegated execution path.",
   },
   {
     label: "Reference Vault",
     value: ADDRESSES.initialVault,
-    note: "Initial vault created through the mainnet deployment script.",
+    note: "Current reference vault used for the live demo path.",
   },
   {
-    label: "Operator / Deployer",
+    label: "Operator",
     value: ADDRESSES.operator,
-    note: "Operator identity from the latest repo deployment artifact.",
+    note: "Current operator identity surfaced by the frontend config.",
   },
   {
     label: "OKX Router",
     value: ADDRESSES.router,
-    note: "Current router constant for live routing on X Layer.",
+    note: "Current router constant used by the adapter flow.",
   },
   {
     label: "OKX Approval Target",
@@ -230,12 +279,12 @@ const DEPLOYMENT_ADDRESSES = [
   {
     label: "USDT",
     value: ADDRESSES.usdt,
-    note: "Base token and fee token in the reference mainnet deployment.",
+    note: "Reference base token and fee token in the default path.",
   },
   {
     label: "USDC",
     value: ADDRESSES.usdc,
-    note: "Allowed output token in the reference mainnet deployment.",
+    note: "Reference output token in the default path.",
   },
 ] as const;
 
@@ -255,13 +304,13 @@ const ENDPOINTS = [
     method: "POST",
     path: "/preview",
     body:
-      "Reads live vault policy, fetches an OKX quote, derives policyMinAmountOut, computes executionHash, and returns the final signable execution package plus risk flags and warnings.",
+      "Reads live vault state, fetches an OKX route, derives the policy-safe minimum output, computes executionHash, and returns the final signable package.",
   },
   {
     method: "POST",
     path: "/execute",
     body:
-      "Enforces x402 payment, validates the signed intent against the cached quote and live vault state, then calls vault.executeSwap and returns jobId plus txHash.",
+      "Enforces x402 payment, validates the signed intent against the cached quote and current vault state, then calls vault.executeSwap.",
   },
   {
     method: "GET",
@@ -292,38 +341,53 @@ const SECURITY_GUARDS = [
 
 const FAQS = [
   {
+    question: "Is this just a relayer?",
+    answer:
+      "No. A relayer forwards transactions. X402 Operator adds custody separation, typed intent approval, onchain execution policy, x402 monetization, and public receipts.",
+  },
+  {
+    question: "Is this centralized because there is a backend in the middle?",
+    answer:
+      "There is an offchain operator service, and we are explicit about that. The important security line still sits onchain in the vault, which means the operator cannot bypass policy and withdraw funds arbitrarily.",
+  },
+  {
+    question: "Why is x402 important here?",
+    answer:
+      "Because the natural buyer of this service is another agent or protocol. x402 gives the operator a clean, request-level execution business model without mixing fee revenue with vault capital.",
+  },
+  {
+    question: "Why not just use session keys?",
+    answer:
+      "Session keys help, but they do not create the same separation between strategy, custody, execution, and public auditability. The vault makes those boundaries explicit and inspectable.",
+  },
+  {
+    question: "What happens if the controller is compromised?",
+    answer:
+      "The owner pauses the vault, revokes the controller, and can rotate policy. The compromise is still bounded by token, pair, amount, slippage, volume, and cooldown rules.",
+  },
+  {
+    question: "What happens if the agent pays and execution later fails?",
+    answer:
+      "In the current MVP, the fee pays for the execution attempt, not a guaranteed fill. That is why preview and pre-validation happen before the x402 challenge.",
+  },
+  {
     question: "Is this just an OKX wrapper?",
     answer:
-      "No. OKX provides route discovery and calldata, but X402 Operator adds the custody boundary, controller authorization, quote binding, x402 monetization, and onchain receipts.",
+      "No. OKX provides routing and calldata. X402 Operator adds the custody boundary, controller authorization, quote binding, x402 monetization, and onchain receipts.",
   },
   {
-    question: "Does x402 payment grant access to vault capital?",
+    question: "Where is the AI in this project?",
     answer:
-      "No. x402 only pays the operator for execution-as-a-service. Capital still moves only if the signed intent and the vault policy both allow the swap.",
-  },
-  {
-    question: "Why does the controller sign executionHash instead of raw calldata?",
-    answer:
-      "It keeps the interface clean while still binding the operator to the exact cached route package that came back from preview.",
-  },
-  {
-    question: "What happens if the controller key is compromised?",
-    answer:
-      "The owner pauses the vault, revokes the controller, and can rotate policy. That is one reason the vault exists instead of broad wallet delegation.",
-  },
-  {
-    question: "Why is this hackathon-ready?",
-    answer:
-      "Because the system is narrow, legible, and production-shaped: contracts enforce policy, APIs are typed, addresses are concrete, and the docs make the trust model understandable in minutes.",
+      "The AI sits in the controller side of the system: deciding when to act. We solve the harder downstream problem of making that decision executable on real capital without broad custody delegation.",
   },
 ] as const;
 
 const PACKAGE_MAP = [
-  { title: "packages/contracts", body: "Solidity vault, factory, adapter, and registry." },
-  { title: "packages/backend", body: "Operator service, payment checks, intent validation, execution." },
-  { title: "packages/shared", body: "Shared types, EIP-712 helpers, and hashes." },
+  { title: "packages/contracts", body: "Vault, factory, adapter, registry." },
+  { title: "packages/backend", body: "Preview, execute, payment checks, submission." },
+  { title: "packages/shared", body: "ExecutionIntent types, hashes, EIP-712 helpers." },
   { title: "packages/agent", body: "Reference controller agent that signs and pays." },
-  { title: "packages/frontend", body: "Human-facing vault console plus this protocol documentation layer." },
+  { title: "packages/frontend", body: "Vault console plus this documentation layer." },
 ] as const;
 
 const INTENT_SNIPPET = `type ExecutionIntent = {
@@ -435,36 +499,36 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
 
   const overviewShortcuts = [
     {
-      title: "Architecture",
-      body: "Roles, trust boundaries, and the protocol split.",
-      target: "docs-architecture" as const,
+      title: "What is live",
+      body: "Scope, proof surface, and the parts we are intentionally not claiming yet.",
+      target: "docs-live" as const,
     },
     {
-      title: "Mainnet",
-      body: "Addresses, chain constants, and reference deployment.",
+      title: "Mainnet proof",
+      body: "Current X Layer constants and addresses wired into the frontend.",
       target: "docs-mainnet" as const,
     },
     {
-      title: "API + Intent",
-      body: "Typed endpoints, preview flow, and signed payload shape.",
+      title: "Typed API",
+      body: "Preview, execute, ExecutionIntent, and executionHash binding.",
       target: "docs-api" as const,
     },
   ];
 
   const sectionViews: Record<DocSectionId, ReactNode> = {
-    "docs-overview": (
+    "docs-pitch": (
       <>
         <section className="docs-hero glass-card">
           <div className="docs-hero-copy">
-            <p className="hero-pill">Agentic swaps, policy first</p>
+            <p className="hero-pill">Build X Hackathon · X Layer Arena</p>
             <h2 className="display-text docs-hero-title">
-              Delegated execution for agents that should not hold the keys.
+              The wedge should be clear in under 30 seconds.
             </h2>
             <p className="docs-hero-text">
-              X402 Operator is a narrow but serious protocol surface: the owner keeps
-              funds in an onchain vault, a controller agent signs typed intents, the
-              operator sells execution as a paid API, and the vault remains the hard
-              enforcement boundary on X Layer mainnet.
+              X402 Operator is the secure execution rail for agents on X Layer.
+              Owners keep capital inside policy-bound vaults, controller agents sign
+              exact execution packages, the operator monetizes execution with x402,
+              and every successful job leaves an onchain receipt.
             </p>
 
             <div className="docs-actions">
@@ -473,26 +537,27 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
                   Open Dashboard
                 </button>
               ) : null}
-              <button
-                type="button"
+              <a
                 className="btn btn-ghost"
-                onClick={() => selectSection("docs-mainnet")}
+                href={HACKATHON_URL}
+                target="_blank"
+                rel="noreferrer"
               >
-                Inspect mainnet constants
-              </button>
+                Hackathon page
+              </a>
             </div>
 
             <div className="docs-stat-row">
               <div className="docs-stat-card">
-                <span className="docs-stat-label">Signed fields</span>
-                <strong>11</strong>
+                <span className="docs-stat-label">Main wedge</span>
+                <strong>1</strong>
               </div>
               <div className="docs-stat-card">
-                <span className="docs-stat-label">Hard boundaries</span>
-                <strong>4</strong>
+                <span className="docs-stat-label">Demo runtime</span>
+                <strong>90s</strong>
               </div>
               <div className="docs-stat-card">
-                <span className="docs-stat-label">Mainnet chain</span>
+                <span className="docs-stat-label">X Layer chain</span>
                 <strong>196</strong>
               </div>
             </div>
@@ -529,107 +594,66 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
             <div className="docs-blueprint-node">
               <span className="docs-blueprint-tag">Onchain</span>
               <strong>OperatorVault</strong>
-              <p>Checks policy, delegates adapter call, updates receipt state.</p>
+              <p>Enforces policy before capital can move.</p>
             </div>
             <div className="docs-blueprint-link" />
             <div className="docs-blueprint-node">
               <span className="docs-blueprint-tag">Audit</span>
               <strong>Registry</strong>
-              <p>Stores jobId, paymentRef, operator, pair, and success count.</p>
+              <p>Stores receipts and updates operator success count.</p>
             </div>
           </div>
         </section>
 
         <section className="docs-section glass-card">
           <SectionLead
-            eyebrow="Core thesis"
-            title="Why this architecture is differentiated"
-            copy="The protocol is intentionally narrow. It does one thing well: policy-bounded delegated swap execution for agents. That restraint makes the system easier to trust, easier to audit, and easier to explain."
+            eyebrow="Why this fits Build X"
+            title="This project is narrow, agent-native, and easy to understand"
+            copy="The strength of the repo is not breadth. The strength is that the thesis, the payment rail, and the trust boundary all line up cleanly in one end-to-end loop."
           />
 
           <div className="docs-card-grid docs-card-grid-3">
-            {PROTOCOL_PILLARS.map((pillar) => (
+            {WIN_REASONS.map((pillar) => (
               <article key={pillar.title} className="docs-card">
                 <h3>{pillar.title}</h3>
                 <p>{pillar.body}</p>
               </article>
             ))}
           </div>
+
+          <div className="docs-card-grid docs-card-grid-3">
+            {BUILD_X_FIT.map((item) => (
+              <article key={item.title} className="docs-card">
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
         </section>
       </>
     ),
-    "docs-architecture": (
+    "docs-live": (
       <section className="docs-section glass-card">
         <SectionLead
-          eyebrow="Architecture"
-          title="Role separation is the product"
-          copy="The system becomes credible because each actor has a narrow job. The owner defines policy, the controller requests action, the operator performs paid execution, and the vault decides whether capital can move."
+          eyebrow="What is live"
+          title="The repo already proves the core loop"
+          copy="This is not a docs-only idea. Contracts, backend, reference agent, and frontend all exist around the same delegated swap execution path."
         />
 
-        <div className="docs-card-grid docs-card-grid-2">
-          {ACTORS.map((actor) => (
-            <article key={actor.title} className="docs-card docs-card-actor">
-              <span className="docs-card-kicker">{actor.title}</span>
-              <p>{actor.body}</p>
+        <div className="docs-card-grid docs-card-grid-3">
+          {LIVE_NOW.map((item) => (
+            <article key={item.title} className="docs-card">
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
             </article>
           ))}
         </div>
 
-        <div className="docs-boundary-grid">
-          <article className="docs-boundary-card">
-            <span className="docs-mini-label">Preview boundary</span>
-            <p>The controller sees the exact package it is about to approve.</p>
-          </article>
-          <article className="docs-boundary-card">
-            <span className="docs-mini-label">Signature boundary</span>
-            <p>The operator only gets a valid action if the controller signed it.</p>
-          </article>
-          <article className="docs-boundary-card">
-            <span className="docs-mini-label">Payment boundary</span>
-            <p>x402 prices the service independently from the vault capital.</p>
-          </article>
-          <article className="docs-boundary-card">
-            <span className="docs-mini-label">Vault boundary</span>
-            <p>Even a paid and signed request still fails if policy no longer allows it.</p>
-          </article>
-        </div>
-      </section>
-    ),
-    "docs-flow": (
-      <section className="docs-section glass-card">
-        <SectionLead
-          eyebrow="Execution loop"
-          title="From preview to receipt"
-          copy="The full loop is designed to be redundant in the right places: the backend validates early to save gas and the vault validates again because onchain policy is the real security line."
-        />
-
-        <div className="docs-timeline">
-          {FLOW_STEPS.map((step) => (
-            <article key={step.step} className="docs-timeline-item">
-              <div className="docs-timeline-index">{step.step}</div>
-              <div className="docs-timeline-copy">
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-    ),
-    "docs-contracts": (
-      <section className="docs-section glass-card">
-        <SectionLead
-          eyebrow="Contract system"
-          title="Four contracts, one execution thesis"
-          copy="Every contract exists for a reason. The vault holds capital and enforces rules. The factory deploys. The adapter talks to the venue. The registry makes outcomes inspectable."
-        />
-
-        <div className="docs-card-grid docs-card-grid-2">
-          {CONTRACTS.map((contract) => (
-            <article key={contract.title} className="docs-card">
-              <span className="docs-card-kicker">{contract.surface}</span>
-              <h3>{contract.title}</h3>
-              <p>{contract.body}</p>
+        <div className="docs-card-grid docs-card-grid-3">
+          {VERIFIABLE_SURFACE.map((item) => (
+            <article key={item.title} className="docs-card">
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
             </article>
           ))}
         </div>
@@ -644,12 +668,60 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
         </div>
       </section>
     ),
+    "docs-demo": (
+      <section className="docs-section glass-card">
+        <SectionLead
+          eyebrow="Demo story"
+          title="The winning path is preview -> sign -> 402 -> execute -> receipt"
+          copy="Do not present this as a consumer dashboard. Present it as the execution layer that becomes necessary once agents move from thinking to touching real capital."
+        />
+
+        <div className="docs-timeline">
+          {DEMO_STEPS.map((step) => (
+            <article key={step.step} className="docs-timeline-item">
+              <div className="docs-timeline-index">{step.step}</div>
+              <div className="docs-timeline-copy">
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    ),
+    "docs-architecture": (
+      <section className="docs-section glass-card">
+        <SectionLead
+          eyebrow="Architecture"
+          title="Role separation is the product"
+          copy="The system works because each actor has a narrow job. The owner defines policy, the controller decides when to act, the operator performs paid execution, and the vault decides whether capital can move."
+        />
+
+        <div className="docs-card-grid docs-card-grid-2">
+          {ACTORS.map((actor) => (
+            <article key={actor.title} className="docs-card docs-card-actor">
+              <span className="docs-card-kicker">{actor.title}</span>
+              <p>{actor.body}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="docs-boundary-grid">
+          {BOUNDARIES.map((boundary) => (
+            <article key={boundary.title} className="docs-boundary-card">
+              <span className="docs-mini-label">{boundary.title}</span>
+              <p>{boundary.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    ),
     "docs-mainnet": (
       <section className="docs-section glass-card">
         <SectionLead
-          eyebrow="Mainnet"
-          title="Current X Layer deployment constants"
-          copy="These values are taken from the current frontend config, the mainnet deployment script, and the latest broadcast artifact in the repo. They should be treated as the repo's live reference set and refreshed after every new production deploy."
+          eyebrow="Mainnet proof"
+          title="Current X Layer reference surface"
+          copy="These values come from the current frontend config and define the proof surface available directly from the repo and the running app."
         />
 
         <div className="docs-fact-grid">
@@ -682,12 +754,12 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
 
         <div className="docs-policy-panel">
           <div className="docs-policy-copy">
-            <span className="docs-mini-label">Reference genesis policy</span>
-            <h3>What the mainnet script configures by default</h3>
+            <span className="docs-mini-label">Reference demo policy</span>
+            <h3>Configured to make the trust model obvious</h3>
             <p>
-              The latest deployment script creates an initial vault optimized for a
-              tight demo loop: one operator, one controller, one live pair, and limits
-              that make risk controls obvious during judging.
+              The current reference setup is intentionally small: one operator, one
+              controller, one pair, and limits that make guardrails visible during the
+              first live demo.
             </p>
           </div>
 
@@ -707,7 +779,7 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
         <SectionLead
           eyebrow="API + intent"
           title="Typed payloads, not fuzzy prompts"
-          copy="The controller integrates against a deterministic API. That matters because the whole system depends on agreeing about the exact execution package before anyone pays for or submits a transaction."
+          copy="The controller integrates against a deterministic API. That is what makes preview, signature, payment, and execution line up cleanly enough for onchain enforcement."
         />
 
         <div className="docs-endpoint-list">
@@ -744,14 +816,23 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
             </pre>
           </article>
         </div>
+
+        <div className="docs-risk-callout">
+          <span className="docs-mini-label">Operational note</span>
+          <p>
+            Preview can explicitly tell you when route data is not ready or the quote is
+            missing. That keeps the product honest: executable when live routing exists,
+            informational when the upstream quote path is not ready.
+          </p>
+        </div>
       </section>
     ),
     "docs-security": (
       <section className="docs-section glass-card">
         <SectionLead
           eyebrow="Security model"
-          title="What the vault enforces onchain"
-          copy="The backend helps with efficiency, but the vault decides whether the swap is legal. That is the difference between an operator with soft promises and a protocol with hard rules."
+          title="The vault is the real security line"
+          copy="The backend helps with efficiency and payment handling, but the vault decides whether the action is legal. That is the difference between a backend with promises and a protocol with hard boundaries."
         />
 
         <div className="docs-guard-grid">
@@ -764,11 +845,11 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
         </div>
 
         <div className="docs-risk-callout">
-          <span className="docs-mini-label">Operational note</span>
+          <span className="docs-mini-label">Remaining trust</span>
           <p>
-            The remaining trust is intentionally narrow: the operator can be offline or
-            choose not to serve a valid job, but it still cannot bypass the vault and
-            take arbitrary funds.
+            The operator can be offline or choose not to serve a valid request, but it
+            still cannot bypass the vault and take arbitrary funds. The design is
+            trust-minimized, not trust-free.
           </p>
         </div>
       </section>
@@ -777,8 +858,8 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
       <section className="docs-section glass-card">
         <SectionLead
           eyebrow="FAQ"
-          title="Questions a judge or integrator will ask"
-          copy="This section is designed to remove ambiguity fast. If someone only spends three minutes with the product, these answers should still make the thesis clear."
+          title="Questions that usually matter first"
+          copy="These are the objections that matter. The right answer is direct, honest about the MVP, and always returns to the same wedge: secure delegated execution without broad custody."
         />
 
         <div className="docs-faq-list">
@@ -794,17 +875,16 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
   };
 
   return (
-    <section className="docs-screen" aria-label="Protocol documentation">
+    <section className="docs-screen" aria-label="X402 Operator documentation">
       <header className="docs-header glass-card">
         <div className="docs-header-brand">
-          <p className="eyebrow">Protocol documentation</p>
-          <h1 className="display-text">X402 Operator Atlas</h1>
+          <p className="eyebrow">Documentation</p>
+          <h1 className="display-text">X402 Operator Documentation</h1>
           <p>
-            A protocol-style walkthrough of delegated execution, trust boundaries, and
-            mainnet deployment on X Layer.
+            The same story as the root README, presented inside the frontend: wedge,
+            live proof, trust model, and demo path.
           </p>
         </div>
-
       </header>
 
       <div className="docs-layout">
@@ -851,18 +931,18 @@ function DocumentationPage({ isConnected }: DocumentationPageProps) {
           <div className="docs-sidebar-block docs-sidebar-callout">
             <span className="docs-mini-label">Why this matters</span>
             <p>
-              The product wins when a judge can see the trust model, the payment rail,
-              and the onchain enforcement path without opening five different files.
+              The project lands when the trust boundary, the x402 fee rail, and the
+              onchain receipt surface are clear without opening ten markdown files.
             </p>
           </div>
 
           <div className="docs-sidebar-block docs-sidebar-sources">
             <span className="docs-mini-label">Backed by repo sources</span>
             <ul>
+              <li>README.md</li>
               <li>OperatorVault.sol</li>
               <li>execute.ts</li>
-              <li>mainnet deployment artifact</li>
-              <li>shared ExecutionIntent types</li>
+              <li>contracts.ts</li>
             </ul>
           </div>
         </aside>
