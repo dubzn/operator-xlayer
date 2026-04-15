@@ -175,7 +175,6 @@ These tasks create foundations that other work depends on. Complete in order.
 ---
 
 ### Parallel Workstreams
-
 These workstreams can be executed independently after Phase 1.
 
 #### Workstream A: OKX Swap Adapter
