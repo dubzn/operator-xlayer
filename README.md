@@ -1,83 +1,75 @@
 # X402 Operator
 
-> Secure swap execution for agents on X Layer without surrendering custody.
+> The secure execution rail for agents on X Layer.
 
-**Status:** Mainnet-first codebase for X Layer (chain 196). The current repo implements `swap-v2`: adapter-aware vault execution, OKX DEX routing, typed quote binding via `executionHash`, and `x402` payment for execution.
+X402 Operator is our Build X Hackathon submission for the X Layer Arena.
 
-## What this is
+The wedge is simple: agents should be able to execute real swaps without receiving broad wallet custody. We solve that by separating four roles:
 
-X402 Operator is an infrastructure primitive for delegated onchain execution.
+- the owner keeps capital in an onchain vault
+- the owner defines policy guardrails
+- a controller agent decides when to act
+- the operator sells execution as a paid API via `x402`
 
-An owner deposits capital into an onchain vault, defines risk guardrails, and authorizes one or more controller addresses. A controller agent decides when to act, gets a preview from the operator, signs a typed `ExecutionIntent`, pays the operator fee via `x402`, and the operator executes only if the vault policy still allows the swap.
+Every successful execution leaves an onchain receipt.
 
-The product is not "create an AI bot here." The product is:
+## The real problem
 
-- keep capital in a vault
-- let agents request execution
-- force every execution through onchain policy
-- meter the execution service with `x402`
+Most agent demos stop at decision-making.
 
-## What exists today
+The hard part begins when an agent needs to touch real capital repeatedly:
 
-The current implementation is intentionally narrow and strong:
+- if you give the agent a private key or broad wallet delegation, execution is powerful but dangerous
+- if the owner signs every action manually, execution is safer but no longer autonomous
 
-- swap-only delegated execution
-- adapter-ready vaults
-- first adapter wired to the OKX DEX Aggregator
-- pair-level allowlists (`tokenIn`, `tokenOut`, and `tokenIn -> tokenOut`)
-- preview-driven quote binding with `executionHash`
-- EIP-712 signed intents (`version = "2"`)
-- onchain receipts and operator track record
+We build the third option:
 
-This means the repo is already a better fit for:
+- capital stays in a vault
+- authority stays bounded by policy
+- the controller signs a typed intent
+- the operator gets paid for execution-as-a-service
+- the vault re-validates everything onchain before capital can move
 
-- trader agents that rotate positions
+## What is live today
+
+The current repo already implements a narrow but credible `swap-v2` slice:
+
+- delegated spot-swap execution
+- `VaultFactory`, `OperatorVault`, `OkxAggregatorSwapAdapter`, and `ExecutionRegistry`
+- policy controls for controllers, input tokens, output tokens, pairs, adapters, per-trade caps, daily volume, slippage, and cooldown
+- preview-driven quote binding through `executionHash`
+- EIP-712 intents with `version = "2"`
+- `x402` payment gating on `POST /execute`
+- onchain receipts plus operator success count
+- a reference controller agent in `packages/agent`
+- a frontend console and in-app documentation in `packages/frontend`
+
+## What we are intentionally not claiming
+
+This is not yet:
+
+- a universal execution primitive for every DeFi action
+- an open marketplace of many operators
+- a full reputation economy
+- a consumer trading app
+- a bot builder where users create strategies inside the product
+
+That restraint is a feature. It keeps the story honest and the demo sharp.
+
+## Who this is for
+
+The first natural users are:
+
+- trader agents that already know when to rotate
 - rebalancers
-- portfolio rotation bots
-- treasury automation for token swaps
+- portfolio rotators
+- treasury automation systems
+- protocol integrations that need repeatable swap execution
+- multi-agent systems where one agent decides and another pays
 
-It does **not** claim to be a universal protocol automation layer yet.
+It is not meant for casual manual one-off swaps.
 
-## Who brings the agent
-
-The owner does not need to create an agent inside this product.
-
-This repo ships a reference controller in `packages/agent`, but the authorized controller can be:
-
-- the owner's own bot
-- a third-party strategy agent
-- a protocol integration
-- the demo agent from this repo
-
-What matters is:
-
-- the vault owner authorizes the controller address
-- the controller signs the typed intent
-- the vault enforces the policy onchain
-
-## Why the agent pays through x402
-
-`x402` pays for the operator's execution service, not for access to the vault capital.
-
-There are two separate money flows:
-
-1. **Vault capital**
-   - belongs to the vault owner
-   - remains inside the vault
-   - is constrained by onchain policy
-
-2. **Operator fee**
-   - is paid by the caller agent via `x402`
-   - pays for preview, validation, routing, transaction submission, and execution
-   - does not grant permission to move vault funds by itself
-
-Authorization still comes from:
-
-- the controller allowlist
-- the EIP-712 signature
-- the vault's onchain policy
-
-## Architecture
+## System in one minute
 
 ```text
 ┌──────────────┐   preview + sign   ┌──────────────┐   executeSwap   ┌──────────────┐
@@ -92,97 +84,236 @@ Authorization still comes from:
         └──────────── preview / execute API ◀───────────────────────────└──────────────┘
 ```
 
-- **Vault Owner** configures policy, deposits capital, and authorizes controllers
-- **Controller Agent** requests swaps and signs the final intent
-- **Operator Backend** previews, charges via `x402`, validates, and submits execution
-- **OperatorVault** holds funds and enforces execution policy onchain
-- **Swap Adapter** is the execution venue abstraction; today the backend supports the OKX adapter
-- **ExecutionRegistry** stores receipts and simple operator track record
+Roles:
 
-## Swap-v2 execution model
+- **Vault owner:** deposits capital, defines policy, authorizes controllers
+- **Controller agent:** requests preview, signs the final intent, pays the operator fee
+- **Operator backend:** quotes, validates, enforces `x402`, and submits execution
+- **OperatorVault:** the hard trust boundary; capital only moves if policy allows it
+- **Swap adapter:** venue abstraction; today the backend supports the OKX adapter
+- **ExecutionRegistry:** public receipt ledger plus simple operator track record
 
-The current flow is:
+## End-to-end execution flow
 
-1. Owner creates a vault and funds it
-2. Owner configures:
-   - controller allowlist
-   - input token allowlist
-   - output token allowlist
-   - allowed pairs
-   - allowed swap adapters
-   - max per trade, daily volume, slippage, cooldown
-3. Controller sends a draft preview request
-4. Backend gets a quote from OKX DEX, computes `executionHash`, derives the policy floor for `minAmountOut`, and returns the preview
-5. Controller signs the **final** `ExecutionIntent` containing:
-   - adapter
-   - amountIn
-   - quotedAmountOut
-   - minAmountOut
-   - nonce
-   - deadline
-   - `executionHash`
-6. Controller calls `POST /execute`
-7. Backend returns HTTP `402`
-8. Controller pays the fee and re-submits with `paymentReference`
-9. Backend validates payment, cached quote, signature, and vault state
-10. Backend calls `vault.executeSwap(...)`
-11. Vault re-validates onchain and records a receipt
+1. The owner creates a vault and funds it.
+2. The owner configures controllers, token allowlists, pair allowlists, adapter allowlists, and risk limits.
+3. The controller sends a draft `POST /preview` request.
+4. The backend reads live vault state, asks OKX DEX for a route, computes `executionHash`, derives a policy-safe `minAmountOut`, and returns the final signable package.
+5. The controller signs the final EIP-712 `ExecutionIntent`.
+6. The controller calls `POST /execute`.
+7. If there is no payment yet, the backend returns HTTP `402`.
+8. The controller pays the fee and retries with `paymentReference`.
+9. The backend validates payment, signature, cached quote, and current vault state.
+10. The backend calls `vault.executeSwap(...)`.
+11. The vault re-validates onchain and writes a receipt through `ExecutionRegistry`.
+
+## Why `executionHash` matters
+
+The controller is not signing a vague instruction like "swap into safety."
+
+The controller signs the exact execution package:
+
+- vault address
+- controller address
+- adapter
+- token pair
+- amount
+- quote-derived output bounds
+- nonce
+- deadline
+- `executionHash`
+
+That gives the system a tight binding between preview and execution without forcing the controller to parse router calldata directly.
 
 ## What the vault enforces onchain
 
-Every delegated swap still goes through hard checks in the vault:
+Every delegated swap still goes through hard checks:
 
 - vault not paused
-- vault address matches the intent
+- `intent.vaultAddress` matches the vault contract
 - selected adapter is allowlisted
 - recovered signer matches `intent.controller`
-- controller is authorized
+- controller is currently authorized
 - nonce is unused
 - deadline has not expired
-- input token is allowlisted
-- output token is allowlisted
-- pair is allowlisted
-- amount is within per-trade cap
+- `tokenIn` is allowlisted
+- `tokenOut` is allowlisted
+- `tokenIn -> tokenOut` pair is allowlisted
+- `amountIn` fits the single-trade cap
 - daily volume cap is respected
 - cooldown has elapsed
-- `executionHash` matches the exact calldata used for execution
-- `intent.minAmountOut` is not weaker than the vault policy floor
-- realized `amountOut` is at least `intent.minAmountOut`
+- `keccak256(executionData) == intent.executionHash`
+- `intent.minAmountOut` is not weaker than the policy floor derived from `quotedAmountOut`
+- realized `amountOut` still satisfies `intent.minAmountOut`
 
-That is the key trust boundary in the system.
+This is the core claim of the project: the operator is useful, but the operator is not a broad custodian.
 
-## What the operator adds beyond OKX
+## Why `x402` belongs here
 
-OKX gives routing and best-execution style calldata. X402 Operator adds:
+`x402` is not decorative.
+
+There are two different money flows in the system:
+
+1. **Vault capital**
+   - belongs to the owner
+   - remains inside the vault
+   - is only touched by successful swap execution if policy allows it
+
+2. **Operator fee**
+   - is paid by the caller agent
+   - pays for execution-as-a-service
+   - covers validation, routing, packaging, and submission
+   - does not grant permission to move vault capital
+
+That clean separation is one of the strongest parts of the demo.
+
+## Why this is more than OKX routing
+
+OKX provides route discovery and calldata.
+
+X402 Operator adds:
 
 - custody separation
 - controller authorization
-- pair-level policy enforcement
-- typed quote binding with `executionHash`
-- `x402` metering for execution-as-a-service
-- receipts and track record
+- pair-level execution policy
+- typed quote binding
+- `x402` monetization
+- public receipts and operator track record
 
-That is why the system is more than "just a DEX wrapper" or "just a relayer."
+That is why the product is not "just an OKX wrapper" and not "just a relayer."
 
-## Packages
+## Suggested demo flow
 
-| Package | Description |
+Recommended demo runtime: `90–120 seconds`.
+
+Suggested structure:
+
+1. **Show the problem**
+   Explain the tradeoff between wallet delegation and manual signing.
+
+2. **Show the vault**
+   Open the frontend, show a funded vault, show the policy fields, show the authorized controller and operator.
+
+3. **Show preview**
+   Display the exact `ExecutionIntent` fields and the preview response, including `expectedOut`, `minAmountOut`, and `executionHash`.
+
+4. **Show `x402`**
+   Trigger `POST /execute`, surface the `402 Payment Required` step, and show the fee payment.
+
+5. **Show enforcement**
+   Show the backend attempting execution and explain that the vault still re-validates everything onchain.
+
+6. **Show the receipt**
+   Show the tx hash, receipt, and operator track record update.
+
+Closing line:
+
+> The ecosystem is building agent brains. We build the execution rail they can trust with capital.
+
+## Mainnet reference
+
+### Network
+
+| Field | Value |
 |---|---|
-| `packages/contracts` | Solidity contracts: vault, factory, adapter, registry |
-| `packages/shared` | Shared types and EIP-712 helpers |
-| `packages/backend` | Express operator service: preview, execute, x402, validation |
-| `packages/agent` | Reference controller agent |
-| `packages/frontend` | React dashboard for vault creation and monitoring |
+| Network | X Layer Mainnet |
+| Chain ID | `196` |
+| RPC URL | `https://rpc.xlayer.tech` |
+| Native currency | `OKB` |
+| Explorer | `https://www.okx.com/explorer/xlayer` |
 
-## Quick start
+### Current frontend reference addresses
 
-### Prerequisites
+These are the addresses currently wired into `packages/frontend/src/config/contracts.ts`:
 
-- Node.js 20+
+| Item | Address |
+|---|---|
+| VaultFactory | `0x9b9453B159E67563ae4656841CB53F71fD64B557` |
+| ExecutionRegistry | `0xa4D8B6764743dFf59bB7b71119d44aC19F0e2235` |
+| OKX Swap Adapter | `0x60cA56681bEa06fE72A73B18Ca62D766B040f7E1` |
+| Reference Vault | `0x749f9bE6366373A85fD6130927fDc90Eb7862bED` |
+| Operator | `0xf88A50EF4CFCaa82021D6B362530Bc0887CB570B` |
+| OKX Router | `0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954` |
+| OKX Approval Target | `0x8b773D83bc66Be128c60e07E17C8901f7a64F000` |
+| USDT | `0x1E4a5963aBFD975d8c9021ce480b42188849D41d` |
+| USDC | `0x74b7F16337b8972027F6196A17a631aC6dE26d22` |
+
+### Reference demo policy
+
+The current frontend and deployment flow are optimized for a crisp first demo:
+
+- base token: `USDT`
+- allowed output token: `USDC`
+- allowed pair: `USDT -> USDC`
+- default swap adapter: OKX
+- one shared operator
+- one initial authorized controller
+
+## API surface
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/preview` | Build the signable execution package and run free preflight checks |
+| `POST` | `/execute` | Enforce `x402`, validate the final payload, and submit execution |
+| `GET` | `/receipts/:jobId` | Fetch the public receipt from `ExecutionRegistry` |
+| `GET` | `/operator/track-record` | Return the current onchain success counter |
+
+### ExecutionIntent
+
+```ts
+type ExecutionIntent = {
+  vaultAddress: string
+  controller: string
+  adapter: string
+  tokenIn: string
+  tokenOut: string
+  amountIn: string
+  quotedAmountOut: string
+  minAmountOut: string
+  nonce: number
+  deadline: number
+  executionHash: string
+}
+```
+
+### Canonical formulas
+
+```text
+policyMinAmountOut = quotedAmountOut * (10_000 - maxSlippageBps) / 10_000
+jobId = keccak256(intentHash, paymentReference)
+```
+
+### Quote source
+
+The backend supports two modes:
+
+- **Mainnet mode:** real OKX DEX API routing
+- **Local/dev mode:** mock router routeData for testing
+
+If preview returns `route-not-ready` or `quote-missing`, the backend is telling you the current preview is informational and not yet executable.
+
+## Repo map
+
+| Path | Purpose |
+|---|---|
+| `packages/contracts` | Solidity contracts for vault, factory, adapter, and registry |
+| `packages/shared` | Shared types, hashing, and EIP-712 helpers |
+| `packages/backend` | Operator API for preview, execute, payment validation, and onchain submission |
+| `packages/agent` | Reference controller agent that signs intents and pays fees |
+| `packages/frontend` | Vault console plus in-app documentation |
+| `HANDOFF.md` | Current implementation notes and operational handoff |
+
+## Running locally
+
+### Requirements
+
+- Node.js `20+`
 - [Foundry](https://book.getfoundry.sh/)
 - MetaMask
 
-### Build and run
+### Install and checks
 
 ```bash
 npm install
@@ -192,47 +323,98 @@ npm run typecheck
 cd packages/contracts
 forge build
 forge test
+```
 
-cd /path/to/repo/packages/backend
+### Backend
+
+Use `packages/backend/.env.example` as the baseline.
+
+Important fields:
+
+- `RPC_URL`
+- `CHAIN_ID`
+- `VAULT_ADDRESS`
+- `REGISTRY_ADDRESS`
+- `FACTORY_ADDRESS`
+- `SWAP_ADAPTER_ADDRESS`
+- `OPERATOR_PRIVATE_KEY`
+- `OPERATOR_FEE`
+- `FEE_TOKEN`
+- `USE_MOCK_ROUTER`
+- OKX API credentials when `USE_MOCK_ROUTER=false`
+
+Run:
+
+```bash
+cd packages/backend
 npm run dev
+```
 
-cd /path/to/repo/packages/agent
+### Agent
+
+Use `packages/agent/.env.example` as the baseline.
+
+Important fields:
+
+- `CONTROLLER_PRIVATE_KEY`
+- `OPERATOR_URL`
+- `VAULT_ADDRESS`
+- `SWAP_ADAPTER_ADDRESS`
+- `TOKEN_IN`
+- `TOKEN_OUT`
+- `FEE_TOKEN`
+
+Run:
+
+```bash
+cd packages/agent
 npm start
+```
 
-cd /path/to/repo/packages/frontend
+### Frontend
+
+```bash
+cd packages/frontend
 npm install
 npm run dev
 ```
 
-The backend and agent `.env.example` files are aligned to the current mainnet-first flow and include:
-
-- `SWAP_ADAPTER_ADDRESS`
-- OKX API credentials
-- optional `OKX_DEX_IDS` / `OKX_EXCLUDE_DEX_IDS`
-
-## Mainnet deployment
-
-See [docs/mainnet-deployment.md](docs/mainnet-deployment.md) for network constants, the current deploy script shape, and notes about refreshing addresses after deploying the `swap-v2` contracts.
+Open the in-app documentation at `/docs`.
 
 ## FAQ
 
-### Does the user create their own agent?
+### Is this just a relayer?
 
-Not necessarily. The user authorizes a controller address. That controller can be their own bot, a third-party agent, a protocol integration, or the demo agent included in this repo.
+No. A relayer forwards transactions. X402 Operator adds custody separation, typed intents, onchain policy, quote binding, `x402` monetization, and public receipts.
 
-### Is x402 paying for access to the vault?
+### Is this centralized because there is a backend?
 
-No. `x402` pays the operator for execution-as-a-service. The capital remains in the vault and can only move if the signed request also passes the vault policy.
+There is an offchain operator service, and we are explicit about that. But the important security boundary is onchain: even a malicious operator still cannot bypass the vault policy and withdraw funds arbitrarily.
 
-### Is this just an OKX wrapper?
+### Why not just use session keys?
 
-No. OKX supplies routing. X402 Operator adds the custody boundary, controller authorization, pair-level guardrails, typed quote binding, `x402` fee flow, and onchain receipts.
+Session keys help, but they do not by themselves create the same separation between strategy, execution, custody, and audit trail. The vault makes the guardrails explicit and inspectable.
 
-## Key documents
+### What happens if the controller is compromised?
 
-- [Architecture & Flow](docs/architecture.md)
-- [API and Types](docs/10-api-and-types.md)
-- [Vault Spec](docs/05-vault-spec.md)
-- [Detailed Execution Flow](docs/16-detailed-execution-flow.md)
-- [Mainnet Deployment](docs/mainnet-deployment.md)
-- [Handoff](HANDOFF.md)
+The owner pauses the vault, revokes the controller, and updates policy. The blast radius is smaller than broad wallet delegation because the controller is still constrained by token, pair, amount, slippage, volume, and cooldown policy.
+
+### What happens if execution fails after payment?
+
+In the current MVP, the fee pays for the execution attempt, not a guaranteed fill. That is why preview and pre-validation happen before the `402` challenge.
+
+### Does the user need to build an agent inside this product?
+
+No. The owner only needs to authorize a controller address. That controller can be the repo's demo agent, a private bot, a third-party strategy agent, or a protocol integration.
+
+## Final positioning
+
+The strongest honest framing for this repo is:
+
+- **today:** secure delegated swap execution for agents on X Layer
+- **next:** more swap venues and richer adapters
+- **later:** protocol-specific actions such as LP, lending, or staking
+
+We are not trying to win by being another trading bot.
+
+We are trying to win by building the execution rail that agentic products can trust with capital.

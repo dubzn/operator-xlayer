@@ -13,12 +13,14 @@ export function HomePage({ address, connecting, error, onConnect }: Props) {
     <section className="landing-screen" aria-label="X402 Operator landing">
       <div className="hero-stage">
         <div className="hero-stack">
-          <p className="hero-pill">Build X Hackathon</p>
+          <p className="hero-pill">Build X Hackathon · X Layer Arena</p>
           <h1 className="display-text hero-title">
-            Delegated execution without surrendering custody.
+            The execution rail for agents on X Layer.
           </h1>
           <p className="hero-text">
-            Agents request swaps. Vaults enforce policy. Operators get paid per job.
+            Owners keep custody in policy-bound vaults, controllers sign exact intents,
+            operators monetize execution via x402, and every successful swap leaves an
+            onchain receipt.
           </p>
 
           <div className="hero-actions">
@@ -40,7 +42,7 @@ export function HomePage({ address, connecting, error, onConnect }: Props) {
             )}
 
             <Link to="/docs" className="btn btn-ghost hero-cta hero-docs">
-              Docs
+              Documentation
             </Link>
           </div>
 

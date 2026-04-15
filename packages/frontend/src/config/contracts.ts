@@ -1,11 +1,17 @@
 export const CHAIN_ID = 196;
 
 export const RPC_URL = "https://rpc.xlayer.tech";
+export const EXPLORER_URL = "https://www.okx.com/explorer/xlayer";
+export const NATIVE_SYMBOL = "OKB";
 
 export const ADDRESSES = {
   factory: "0x9b9453B159E67563ae4656841CB53F71fD64B557" as `0x${string}`,
   registry: "0xa4D8B6764743dFf59bB7b71119d44aC19F0e2235" as `0x${string}`,
+  swapAdapter: "0x60cA56681bEa06fE72A73B18Ca62D766B040f7E1" as `0x${string}`,
+  initialVault: "0x749f9bE6366373A85fD6130927fDc90Eb7862bED" as `0x${string}`,
+  operator: "0xf88A50EF4CFCaa82021D6B362530Bc0887CB570B" as `0x${string}`,
   router: "0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954" as `0x${string}`,
+  approvalTarget: "0x8b773D83bc66Be128c60e07E17C8901f7a64F000" as `0x${string}`,
   usdt: "0x1E4a5963aBFD975d8c9021ce480b42188849D41d" as `0x${string}`,
   usdc: "0x74b7F16337b8972027F6196A17a631aC6dE26d22" as `0x${string}`,
 } as const;
