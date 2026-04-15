@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/run.ts",
+    "demo:swap": "tsx src/demoSwap.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

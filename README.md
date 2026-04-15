@@ -388,6 +388,17 @@ npm start
 
 For multi-vault end-to-end tests, set `VAULT_ADDRESSES` as a comma-separated list. The agent will run one pass over every configured vault in each round and can optionally register them in the backend indexer before execution.
 
+### Demo swap command
+
+For the live Codex/Claude demo path, use the single-shot script instead of the looping agent:
+
+```bash
+cd /Users/damianalejandropinones/Documents/temp/agentic/operator-xlayer
+npm run demo:swap -w @x402-operator/agent -- --vault 0x... --from USDT --to USDC --amount 1 --execute-if-ready --json
+```
+
+That command runs `preview` first and only executes if the vault is ready.
+
 ### Frontend
 
 ```bash

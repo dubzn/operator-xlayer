@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vault Swap Demo"
+  short_description: "Preview and execute a demo swap from a vault through the backend"
+  default_prompt: "Use the demo swap workflow for a vault: run preview first, tell me if the vault is ready, and execute through the backend only when preview is clean."
