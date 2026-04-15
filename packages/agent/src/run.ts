@@ -35,6 +35,11 @@ interface WatchResponse {
   watching: string[] | string;
 }
 
+interface TokenMeta {
+  decimals: number;
+  symbol: string;
+}
+
 function log(msg: string) {
   const ts = new Date().toISOString().slice(11, 19);
   console.log(`[${ts}] ${msg}`);
@@ -44,8 +49,76 @@ function shortAddr(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function formatAmount(raw: string, decimals = 6): string {
-  return (Number(raw) / 10 ** decimals).toFixed(decimals > 6 ? 8 : 2);
+const tokenMetaCache = new Map<string, Promise<TokenMeta>>();
+
+function formatAmount(raw: string | bigint, decimals = 6, maxFractionDigits = 6): string {
+  const amount = ethers.formatUnits(typeof raw === "bigint" ? raw : BigInt(raw), decimals);
+  const [wholePart, fractionalPart = ""] = amount.split(".");
+  const safeFractionDigits = Math.max(0, Math.min(maxFractionDigits, decimals));
+
+  if (safeFractionDigits === 0) {
+    return wholePart;
+  }
+
+  const trimmedFraction = fractionalPart
+    .slice(0, safeFractionDigits)
+    .replace(/0+$/, "");
+
+  if (trimmedFraction.length > 0) {
+    return `${wholePart}.${trimmedFraction}`;
+  }
+
+  const paddedFraction = fractionalPart.padEnd(Math.min(2, safeFractionDigits), "0").slice(0, Math.min(2, safeFractionDigits));
+  return paddedFraction.length > 0 ? `${wholePart}.${paddedFraction}` : wholePart;
+}
+
+async function getTokenMeta(
+  provider: ethers.Provider,
+  tokenAddress: string,
+  fallbackDecimals = 6
+): Promise<TokenMeta> {
+  const normalized = ethers.getAddress(tokenAddress);
+  const cached = tokenMetaCache.get(normalized);
+  if (cached) {
+    return cached;
+  }
+
+  const metaPromise = (async () => {
+    const contract = new ethers.Contract(
+      normalized,
+      [
+        "function decimals() view returns (uint8)",
+        "function symbol() view returns (string)",
+      ],
+      provider
+    );
+
+    let decimals = fallbackDecimals;
+    let symbol = shortAddr(normalized);
+
+    try {
+      decimals = Number(await contract.decimals());
+    } catch {}
+
+    try {
+      symbol = String(await contract.symbol());
+    } catch {}
+
+    return { decimals, symbol };
+  })();
+
+  tokenMetaCache.set(normalized, metaPromise);
+  return metaPromise;
+}
+
+async function describeTokenAmount(
+  provider: ethers.Provider,
+  tokenAddress: string,
+  rawAmount: string,
+  fallbackDecimals = 6
+): Promise<string> {
+  const meta = await getTokenMeta(provider, tokenAddress, fallbackDecimals);
+  return `${formatAmount(rawAmount, meta.decimals, Math.min(meta.decimals, 8))} ${meta.symbol} (${rawAmount} base units)`;
 }
 
 function parseVaultAddresses(): string[] {
@@ -158,8 +231,9 @@ async function executeSwapCycle(
     executionHash: p.quotedRoute.executionHash,
   };
 
+  const feeSummary = await describeTokenAmount(wallet.provider!, p.estimatedFee.token, p.estimatedFee.amount);
   log(
-    `Preview OK — expected out: ${formatAmount(p.quotedRoute.expectedOut, 18)}, min out: ${formatAmount(p.quotedRoute.minAmountOut, 18)}, fee: ${formatAmount(p.estimatedFee.amount)}`
+    `Preview OK — expected out: ${formatAmount(p.quotedRoute.expectedOut, 18, 8)}, min out: ${formatAmount(p.quotedRoute.minAmountOut, 18, 8)}, x402 fee est.: ${feeSummary}`
   );
 
   const signature = await signIntent(wallet, intent);
@@ -181,7 +255,8 @@ async function executeSwapCycle(
   }
 
   const challenge = firstCall.data;
-  log(`Got 402 — fee: ${formatAmount(challenge.fee)} to ${challenge.paymentAddress.slice(0, 10)}...`);
+  const challengeFeeSummary = await describeTokenAmount(wallet.provider!, challenge.token, challenge.fee);
+  log(`Got 402 — x402 fee: ${challengeFeeSummary} to ${challenge.paymentAddress.slice(0, 10)}...`);
 
   const feeContract = new ethers.Contract(
     challenge.token,
@@ -193,7 +268,8 @@ async function executeSwapCycle(
   const payTx = await feeContract.transfer(challenge.paymentAddress, challenge.fee);
   const payReceipt = await payTx.wait();
   const paymentReference = payReceipt.hash;
-  log(`Fee paid: ${paymentReference}`);
+  log(`x402 fee paid: ${challengeFeeSummary}`);
+  log(`  payment tx: ${paymentReference}`);
 
   log("Executing swap...");
   const execCall = await apiCall<{ status: string; jobId: string; txHash: string }>(
@@ -220,6 +296,7 @@ async function main() {
 
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet = new ethers.Wallet(CONTROLLER_PRIVATE_KEY, provider);
+  const feeTokenMeta = await getTokenMeta(provider, FEE_TOKEN);
 
   log(`Controller: ${wallet.address}`);
   log(`Backend:    ${OPERATOR_URL}`);
@@ -266,7 +343,9 @@ async function main() {
     provider
   );
   const balance = await feeContract.balanceOf(wallet.address);
-  log(`Fee token balance: ${formatAmount(balance.toString())}\n`);
+  log(
+    `Fee token balance: ${formatAmount(balance.toString(), feeTokenMeta.decimals, Math.min(feeTokenMeta.decimals, 8))} ${feeTokenMeta.symbol}\n`
+  );
 
   let round = 0;
   let successes = 0;
