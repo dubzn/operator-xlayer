@@ -1,10 +1,8 @@
 import { useEffect } from "react";
 import type { Address } from "viem";
-import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import { useWallet } from "./hooks/useWallet";
 import { AppNav } from "./components/AppNav";
-import { PublicNav } from "./components/PublicNav";
-import { WalletUtilityBar } from "./components/WalletUtilityBar";
 import { AppFooter } from "./components/AppFooter";
 import DarkVeil from "./components/DarkVeil";
 import { HomePage } from "./pages/HomePage";
@@ -91,8 +89,6 @@ function App() {
   const { address, walletClient, publicClient, connect, disconnect, connecting, error } =
     useWallet();
   const navigate = useNavigate();
-  const location = useLocation();
-  const showAuthenticatedShell = Boolean(address) && location.pathname !== "/home";
 
   const handleConnect = async () => {
     const connectedAddress = await connect();
@@ -126,14 +122,12 @@ function App() {
       <div className="app-noise" />
 
       <div className="app-frame">
-        {showAuthenticatedShell ? (
-          <div className="shell-top-row">
-            <AppNav />
-            {address ? <WalletUtilityBar address={address} onDisconnect={handleDisconnect} /> : null}
-          </div>
-        ) : (
-          <PublicNav />
-        )}
+        <AppNav
+          address={address}
+          onDisconnect={handleDisconnect}
+          onConnect={handleConnect}
+          connecting={connecting}
+        />
 
         <main className="app-main">
           <Routes>
@@ -156,12 +150,7 @@ function App() {
             <Route
               path="/docs"
               element={
-                <DocsPage
-                  address={address}
-                  connecting={connecting}
-                  error={error}
-                  onConnect={handleConnect}
-                />
+                <DocsPage address={address} />
               }
             />
 

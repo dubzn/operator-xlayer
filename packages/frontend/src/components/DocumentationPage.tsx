@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ADDRESSES,
   CHAIN_ID,
@@ -10,8 +11,6 @@ import "./DocumentationPage.css";
 
 interface DocumentationPageProps {
   isConnected: boolean;
-  onBack: () => void;
-  onConnect: () => void;
 }
 
 const DOC_SECTIONS = [
@@ -382,7 +381,8 @@ function getSectionFromHash(): DocSectionId {
   return isDocSectionId(currentHash) ? currentHash : DEFAULT_SECTION;
 }
 
-function DocumentationPage({ isConnected, onBack, onConnect }: DocumentationPageProps) {
+function DocumentationPage({ isConnected }: DocumentationPageProps) {
+  const navigate = useNavigate();
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<DocSectionId>(() => getSectionFromHash());
 
@@ -420,16 +420,6 @@ function DocumentationPage({ isConnected, onBack, onConnect }: DocumentationPage
 
     setActiveSection(sectionId);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function handlePrimaryAction() {
-    if (isConnected) {
-      onBack();
-      return;
-    }
-
-    onBack();
-    onConnect();
   }
 
   const activeIndex = DOC_SECTIONS.findIndex((section) => section.id === activeSection);
@@ -478,9 +468,11 @@ function DocumentationPage({ isConnected, onBack, onConnect }: DocumentationPage
             </p>
 
             <div className="docs-actions">
-              <button className="btn btn-primary" onClick={() => handlePrimaryAction()}>
-                {isConnected ? "Return to cockpit" : "Connect and launch"}
-              </button>
+              {isConnected ? (
+                <button className="btn btn-primary" onClick={() => navigate("/vaults")}>
+                  Open Dashboard
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-ghost"
@@ -813,14 +805,6 @@ function DocumentationPage({ isConnected, onBack, onConnect }: DocumentationPage
           </p>
         </div>
 
-        <div className="docs-header-actions">
-          <button className="btn btn-ghost" onClick={() => handlePrimaryAction()}>
-            {isConnected ? "Open Dashboard" : "Connect Wallet"}
-          </button>
-          <button className="btn btn-primary" onClick={() => onBack()}>
-            Back
-          </button>
-        </div>
       </header>
 
       <div className="docs-layout">
