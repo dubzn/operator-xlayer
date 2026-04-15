@@ -11,6 +11,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "paths": {
+      "@x402-operator/shared": ["../shared/dist/index.d.ts"]
+    }
   },
   "include": ["src"]
 }
