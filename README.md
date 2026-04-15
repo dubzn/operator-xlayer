@@ -72,15 +72,15 @@ It is not meant for casual manual one-off swaps.
 ## System in one minute
 
 ```text
-┌──────────────┐   preview + sign   ┌──────────────┐   executeSwap   ┌──────────────┐
-│ Controller   │ ─────────────────▶ │   Operator   │ ──────────────▶ │ OperatorVault │
-│   Agent      │   pays fee (402)   │   Backend    │   via adapter   │   (onchain)   │
-└──────────────┘                    └──────────────┘                  └──────────────┘
+┌──────────────┐   preview + sign   ┌──────────────┐   executeSwap    ┌───────────────┐
+│ Controller   │ ─────────────────▶ │   Operator   │ ──────────────▶  │ OperatorVault │
+│   Agent      │   pays fee (402)   │   Backend    │   via adapter    │   (onchain)   │
+└──────────────┘                    └──────────────┘                  └───────────────┘
         │                                     │                               │
         │                                     │                               ▼
-        │                                     │                        ┌──────────────┐
-        │                                     └──── OKX DEX quote ───▶ │ Execution    │
-        │                                                              │ Registry     │
+        │                                     │                         ┌──────────────┐
+        │                                     └──── OKX DEX quote ───▶  │ Execution    │
+        │                                                               │ Registry     │
         └──────────── preview / execute API ◀───────────────────────────└──────────────┘
 ```
 
