@@ -232,7 +232,7 @@ const DEPLOYMENT_ADDRESSES = [
 const INITIAL_POLICY = [
   { label: "Base token", value: "USDT" },
   { label: "Allowed output token", value: "USDC" },
-  { label: "Allowed pair", value: "USDT -> USDC" },
+  { label: "Token policy", value: "Allowlisted inputs + outputs" },
   { label: "Default swap adapter", value: "OKX" },
   { label: "Operator", value: "Shared" },
   { label: "Authorized controller", value: "1 controller" },
@@ -283,7 +283,7 @@ const SECURITY_GUARDS = [
   "controller is authorized",
   "nonce and deadline are valid",
   "adapter is allowlisted",
-  "token and pair are allowlisted",
+  "input and output token allowlists pass",
   "trade caps, daily volume, and cooldown pass",
   "executionData hash matches intent",
   "minAmountOut still meets policy",
@@ -303,7 +303,7 @@ const MONEY_FLOWS = [
 const OKX_DIFFERENCE = [
   "custody separation",
   "controller authorization",
-  "pair-level execution policy",
+  "token-level execution policy",
   "typed quote binding",
   "x402 monetization",
   "public receipts and operator track record",

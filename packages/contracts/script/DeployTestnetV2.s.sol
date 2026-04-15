@@ -55,7 +55,6 @@ contract DeployTestnetV2 is Script {
         // 7. Configure test vault
         OperatorVault(vault).authorizeController(deployer);
         OperatorVault(vault).addAllowedToken(usdc);
-        OperatorVault(vault).allowPair(usdt, usdc);
 
         console.log("--- Config ---");
         console.log("Deployer:", deployer);

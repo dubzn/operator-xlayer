@@ -3,23 +3,24 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {VaultFactory} from "../src/VaultFactory.sol";
-import {OkxAggregatorSwapAdapter} from "../src/OkxAggregatorSwapAdapter.sol";
+import {ExecutionRegistry} from "../src/ExecutionRegistry.sol";
 
 contract DeployFactory is Script {
     function run() external {
-        // Reuse existing registry and OKX router addresses
-        address registry = 0x22188933120f63Ea6EAd700fFc967bdB0db88A79;
+        // Reuse existing deployed contracts on X Layer mainnet
+        address registry = 0x92bA6C8cc60Dfd41D25D4bA0F3d771DAC7009A66;
         address operator = 0xF88A50ef4CfCAa82021D6b362530bc0887cB570b;
-        address router = 0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954;
-        address approvalTarget = 0x8b773D83bc66Be128c60e07E17C8901f7a64F000;
+        address swapAdapter = 0x12b5152aAA2Ef6DA029b4a5BAfef1bF6465bd0c4;
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
-        OkxAggregatorSwapAdapter adapter = new OkxAggregatorSwapAdapter(router, approvalTarget);
-        console.log("OKX Adapter:", address(adapter));
-
-        VaultFactory factory = new VaultFactory(registry, operator, address(adapter));
+        // 1. Deploy new VaultFactory (now includes registry.authorizeVault in createVault)
+        VaultFactory factory = new VaultFactory(registry, operator, swapAdapter);
         console.log("VaultFactory:", address(factory));
+
+        // 2. Authorize new factory in the existing registry
+        ExecutionRegistry(registry).authorizeFactory(address(factory));
+        console.log("Factory authorized in registry");
 
         vm.stopBroadcast();
     }

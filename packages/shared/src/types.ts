@@ -75,7 +75,6 @@ export interface ExecutionPreview {
     nonceAvailable: boolean;
     inputTokenAllowed: boolean;
     outputTokenAllowed: boolean;
-    pairAllowed: boolean;
     amountWithinLimit: boolean;
     withinDailyVolume: boolean;
     cooldownMet: boolean;

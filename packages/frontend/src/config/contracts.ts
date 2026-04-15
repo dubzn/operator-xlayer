@@ -5,10 +5,10 @@ export const EXPLORER_URL = "https://www.okx.com/explorer/xlayer";
 export const NATIVE_SYMBOL = "OKB";
 
 export const ADDRESSES = {
-  factory: "0x9b9453B159E67563ae4656841CB53F71fD64B557" as `0x${string}`,
-  registry: "0xa4D8B6764743dFf59bB7b71119d44aC19F0e2235" as `0x${string}`,
-  swapAdapter: "0x60cA56681bEa06fE72A73B18Ca62D766B040f7E1" as `0x${string}`,
-  initialVault: "0x749f9bE6366373A85fD6130927fDc90Eb7862bED" as `0x${string}`,
+  factory: "0xEccE36E0a275cE7FC3216b4b39E9ea54D26a1D21" as `0x${string}`,
+  registry: "0x92bA6C8cc60Dfd41D25D4bA0F3d771DAC7009A66" as `0x${string}`,
+  swapAdapter: "0x12b5152aAA2Ef6DA029b4a5BAfef1bF6465bd0c4" as `0x${string}`,
+  initialVault: "0x5c93198C15f4bfE63C5A7038f8c7078A9d636cEa" as `0x${string}`,
   operator: "0xf88A50EF4CFCaa82021D6B362530Bc0887CB570B" as `0x${string}`,
   router: "0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954" as `0x${string}`,
   approvalTarget: "0x8b773D83bc66Be128c60e07E17C8901f7a64F000" as `0x${string}`,

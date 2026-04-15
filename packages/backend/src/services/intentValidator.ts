@@ -13,7 +13,6 @@ export interface IntentPolicySnapshot {
   nonceUsed: boolean;
   inputTokenAllowed: boolean;
   tokenOutAllowed: boolean;
-  pairAllowed: boolean;
   maxAmountPerTrade: bigint;
   maxDailyVolume: bigint;
   maxSlippageBps: bigint;
@@ -32,7 +31,6 @@ export interface PolicyCheckSummary {
   nonceAvailable: boolean;
   inputTokenAllowed: boolean;
   outputTokenAllowed: boolean;
-  pairAllowed: boolean;
   amountWithinLimit: boolean;
   withinDailyVolume: boolean;
   cooldownMet: boolean;
@@ -59,7 +57,6 @@ export async function readIntentPolicySnapshot(
   const nonceUsed = await vault.usedNonces(intent.nonce);
   const inputTokenAllowed = await vault.allowedInputTokens(intent.tokenIn);
   const tokenOutAllowed = await vault.allowedTokens(intent.tokenOut);
-  const pairAllowed = await vault.allowedPairs(intent.tokenIn, intent.tokenOut);
   const maxAmountPerTrade = await vault.maxAmountPerTrade();
   const maxDailyVolume = await vault.maxDailyVolume();
   const maxSlippageBps = await vault.maxSlippageBps();
@@ -79,7 +76,6 @@ export async function readIntentPolicySnapshot(
     nonceUsed,
     inputTokenAllowed,
     tokenOutAllowed,
-    pairAllowed,
     maxAmountPerTrade: BigInt(maxAmountPerTrade),
     maxDailyVolume: BigInt(maxDailyVolume),
     maxSlippageBps: BigInt(maxSlippageBps),
@@ -111,7 +107,6 @@ export function buildPolicyCheckSummary(
     nonceAvailable: !snapshot.nonceUsed,
     inputTokenAllowed: snapshot.inputTokenAllowed,
     outputTokenAllowed: snapshot.tokenOutAllowed,
-    pairAllowed: snapshot.pairAllowed,
     amountWithinLimit: amount <= snapshot.maxAmountPerTrade,
     withinDailyVolume:
       snapshot.maxDailyVolume === 0n || effectiveDailyUsed + amount <= snapshot.maxDailyVolume,
@@ -189,10 +184,6 @@ export async function validateIntent(
 
   if (!summary.outputTokenAllowed) {
     return { valid: false, error: "tokenOut not in allowlist" };
-  }
-
-  if (!summary.pairAllowed) {
-    return { valid: false, error: "token pair not in allowlist" };
   }
 
   if (!summary.vaultNotPaused) {

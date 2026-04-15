@@ -89,7 +89,6 @@ contract OperatorVault is EIP712 {
     error IntentExpired(uint256 deadline);
     error InputTokenNotAllowed(address token);
     error TokenNotAllowed(address token);
-    error PairNotAllowed(address tokenIn, address tokenOut);
     error SwapAdapterNotAllowed(address adapter);
     error AmountExceedsLimit(uint256 amount, uint256 max);
     error VaultAddressMismatch();
@@ -265,8 +264,6 @@ contract OperatorVault is EIP712 {
         if (block.timestamp > intent.deadline) revert IntentExpired(intent.deadline);
         if (!allowedInputTokens[intent.tokenIn]) revert InputTokenNotAllowed(intent.tokenIn);
         if (!allowedTokens[intent.tokenOut]) revert TokenNotAllowed(intent.tokenOut);
-        if (!allowedPairs[intent.tokenIn][intent.tokenOut]) revert PairNotAllowed(intent.tokenIn, intent.tokenOut);
-
         if (intent.amountIn > maxAmountPerTrade) {
             revert AmountExceedsLimit(intent.amountIn, maxAmountPerTrade);
         }

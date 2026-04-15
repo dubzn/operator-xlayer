@@ -36,7 +36,7 @@ The current repo already implements a narrow but credible `swap-v2` slice:
 
 - delegated spot-swap execution
 - `VaultFactory`, `OperatorVault`, `OkxAggregatorSwapAdapter`, and `ExecutionRegistry`
-- policy controls for controllers, input tokens, output tokens, pairs, adapters, per-trade caps, daily volume, slippage, and cooldown
+- policy controls for controllers, input tokens, output tokens, adapters, per-trade caps, daily volume, slippage, and cooldown
 - preview-driven quote binding through `executionHash`
 - EIP-712 intents with `version = "2"`
 - `x402` payment gating on `POST /execute`
@@ -96,7 +96,7 @@ Roles:
 ## End-to-end execution flow
 
 1. The owner creates a vault and funds it.
-2. The owner configures controllers, token allowlists, pair allowlists, adapter allowlists, and risk limits.
+2. The owner configures controllers, token allowlists, adapter allowlists, and risk limits.
 3. The controller sends a draft `POST /preview` request.
 4. The backend reads live vault state, asks OKX DEX for a route, computes `executionHash`, derives a policy-safe `minAmountOut`, and returns the final signable package.
 5. The controller signs the final EIP-712 `ExecutionIntent`.
@@ -138,7 +138,6 @@ Every delegated swap still goes through hard checks:
 - deadline has not expired
 - `tokenIn` is allowlisted
 - `tokenOut` is allowlisted
-- `tokenIn -> tokenOut` pair is allowlisted
 - `amountIn` fits the single-trade cap
 - daily volume cap is respected
 - cooldown has elapsed
@@ -175,7 +174,7 @@ X402 Operator adds:
 
 - custody separation
 - controller authorization
-- pair-level execution policy
+- token-level execution policy
 - typed quote binding
 - `x402` monetization
 - public receipts and operator track record
@@ -238,10 +237,10 @@ These are the addresses currently wired into `packages/frontend/src/config/contr
 
 | Item | Address |
 |---|---|
-| VaultFactory | `0x9b9453B159E67563ae4656841CB53F71fD64B557` |
-| ExecutionRegistry | `0xa4D8B6764743dFf59bB7b71119d44aC19F0e2235` |
-| OKX Swap Adapter | `0x60cA56681bEa06fE72A73B18Ca62D766B040f7E1` |
-| Reference Vault | `0x749f9bE6366373A85fD6130927fDc90Eb7862bED` |
+| VaultFactory | `0x724F0a29C5dd536d973B4534e44E0325a7eF16d3` |
+| ExecutionRegistry | `0x92bA6C8cc60Dfd41D25D4bA0F3d771DAC7009A66` |
+| OKX Swap Adapter | `0x12b5152aAA2Ef6DA029b4a5BAfef1bF6465bd0c4` |
+| Reference Vault | `0x5c93198C15f4bfE63C5A7038f8c7078A9d636cEa` |
 | Operator | `0xf88A50EF4CFCaa82021D6B362530Bc0887CB570B` |
 | OKX Router | `0xD1b8997AaC08c619d40Be2e4284c9C72cAB33954` |
 | OKX Approval Target | `0x8b773D83bc66Be128c60e07E17C8901f7a64F000` |
@@ -254,7 +253,6 @@ The current frontend and deployment flow are optimized for a crisp first demo:
 
 - base token: `USDT`
 - allowed output token: `USDC`
-- allowed pair: `USDT -> USDC`
 - default swap adapter: OKX
 - one shared operator
 - one initial authorized controller
@@ -425,7 +423,7 @@ Session keys help, but they do not by themselves create the same separation betw
 
 ### What happens if the controller is compromised?
 
-The owner pauses the vault, revokes the controller, and updates policy. The blast radius is smaller than broad wallet delegation because the controller is still constrained by token, pair, amount, slippage, volume, and cooldown policy.
+The owner pauses the vault, revokes the controller, and updates policy. The blast radius is smaller than broad wallet delegation because the controller is still constrained by token allowlists, amount, slippage, volume, and cooldown policy.
 
 ### What happens if execution fails after payment?
 
@@ -444,5 +442,4 @@ The strongest honest framing for this repo is:
 - **later:** protocol-specific actions such as LP, lending, or staking
 
 We are not trying to win by being another trading bot.
-
 We are trying to win by building the execution rail that agentic products can trust with capital.

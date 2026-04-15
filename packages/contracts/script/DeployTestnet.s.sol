@@ -52,8 +52,7 @@ contract DeployTestnet is Script {
         // 5. Configure
         registry.authorizeVault(address(vault));
         vault.authorizeController(deployer); // controller = deployer for testnet
-        vault.addAllowedToken(usdc);         // allow USDT -> USDC swaps
-        vault.allowPair(usdt, usdc);
+        vault.addAllowedToken(usdc);         // tokenOut allowlist is enough for USDT -> USDC swaps
 
         console.log("--- Config ---");
         console.log("Owner/Operator/Controller:", deployer);

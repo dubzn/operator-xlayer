@@ -55,9 +55,8 @@ contract DeployMainnet is Script {
         );
         console.log("Vault (via factory):", vault);
 
-        // 6. Configure vault — allow USDC as output token and USDT -> USDC pair
+        // 6. Configure vault — allow USDC as output token and authorize the controller
         OperatorVault(vault).addAllowedToken(usdc);
-        OperatorVault(vault).allowPair(usdt, usdc);
         OperatorVault(vault).authorizeController(deployer);
 
         console.log("--- Deployment Summary ---");

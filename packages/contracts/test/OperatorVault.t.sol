@@ -63,7 +63,6 @@ contract OperatorVaultTest is Test {
         vm.startPrank(vaultOwner);
         vault.authorizeController(controller);
         vault.addAllowedToken(address(weth));
-        vault.allowPair(address(usdt), address(weth));
 
         usdt.mint(vaultOwner, 5000e6);
         usdt.approve(address(vault), 5000e6);
@@ -364,10 +363,7 @@ contract OperatorVaultTest is Test {
         vault.executeSwap(intent, routeData, sig, bytes32(uint256(1)), address(registry));
     }
 
-    function test_revert_pairNotAllowed() public {
-        vm.prank(vaultOwner);
-        vault.revokePair(address(usdt), address(weth));
-
+    function test_pairAllowlistIsNotRequiredForExecution() public {
         bytes memory routeData = _buildRouteData(SWAP_AMOUNT, SWAP_OUT, address(vault));
         OperatorVault.ExecutionIntent memory intent = _buildIntent(
             vault,
@@ -384,7 +380,6 @@ contract OperatorVaultTest is Test {
         bytes memory sig = _signIntent(intent, controllerKey, vault);
 
         vm.prank(operator);
-        vm.expectRevert(abi.encodeWithSelector(OperatorVault.PairNotAllowed.selector, address(usdt), address(weth)));
         vault.executeSwap(intent, routeData, sig, bytes32(uint256(1)), address(registry));
     }
 
@@ -584,7 +579,6 @@ contract OperatorVaultTest is Test {
         vm.startPrank(vaultOwner);
         smallVault.authorizeController(controller);
         smallVault.addAllowedToken(address(weth));
-        smallVault.allowPair(address(usdt), address(weth));
         usdt.mint(vaultOwner, 5000e6);
         usdt.approve(address(smallVault), 5000e6);
         smallVault.deposit(address(usdt), 5000e6);

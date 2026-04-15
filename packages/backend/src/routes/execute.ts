@@ -95,11 +95,6 @@ router.post("/preview", async (req: Request, res: Response) => {
       warnings.push("The selected output token is not allowlisted on the vault.");
     }
 
-    if (!summary.pairAllowed) {
-      riskFlags.push("pair-not-allowed");
-      warnings.push("The selected token pair is not allowlisted on the vault.");
-    }
-
     if (!summary.amountWithinLimit) {
       riskFlags.push("max-amount-exceeded");
       warnings.push("The requested amount is above the single-trade cap.");

@@ -45,7 +45,6 @@ contract Deploy is Script {
 
         vault.authorizeController(controller);
         vault.addAllowedToken(tokenOut);
-        vault.allowPair(baseToken, tokenOut);
 
         console.log("Controller authorized:", controller);
         console.log("Base token:", baseToken);
