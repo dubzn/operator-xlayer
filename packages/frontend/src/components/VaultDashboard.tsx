@@ -258,7 +258,6 @@ export function VaultDashboard({
   const [depositOpen, setDepositOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [controllers, setControllers] = useState<Address[]>([]);
   const [allowedInputTokens, setAllowedInputTokens] = useState<Address[]>([]);
   const [allowedTokens, setAllowedTokens] = useState<Address[]>([]);
@@ -352,16 +351,6 @@ export function VaultDashboard({
       chain: walletClient!.chain,
     });
 
-  const copyVaultAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(vault);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch (err) {
-      console.error("Failed to copy vault address:", err);
-    }
-  };
-
   const netValue = Number(data.balanceUsdt + data.balanceUsdc) / 1e6;
   const chartSeries = generateChartSeries(vault, netValue, activeTimeframe);
   chartSeries[chartSeries.length - 1] = {
@@ -373,7 +362,6 @@ export function VaultDashboard({
   const lastPoint = chartSeries[chartSeries.length - 1]?.value ?? netValue;
   const deltaPercent = firstPoint === 0 ? 0 : ((lastPoint - firstPoint) / firstPoint) * 100;
   const deltaPositive = deltaPercent >= 0;
-  const vaultName = deriveVaultName(data.baseToken);
 
   const depositParsed = parseFloat(depositAmount);
   const canSubmitDeposit =

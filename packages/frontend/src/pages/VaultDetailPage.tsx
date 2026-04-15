@@ -5,7 +5,7 @@ import { VaultDashboard } from "../components/VaultDashboard";
 import { useOwnedVaults } from "../hooks/useOwnedVaults";
 import { useVaultData } from "../hooks/useVaultData";
 import { useVaultHistory } from "../hooks/useVaultHistory";
-import { shortAddr, deriveVaultName } from "../lib/vaults";
+import { shortAddr, deriveVaultName } from "../utils/vaults";
 
 interface Props {
   walletClient: WalletClient | null;

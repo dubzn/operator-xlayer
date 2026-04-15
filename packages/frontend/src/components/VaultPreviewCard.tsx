@@ -11,7 +11,7 @@ import {
   formatUsd,
   shortAddr,
   tokenTooltip,
-} from "../lib/vaults";
+} from "../utils/vaults";
 
 interface Props {
   vault: Address;

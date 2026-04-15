@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import { shortAddr } from "../lib/vaults";
+import { shortAddr } from "../utils/vaults";
 
 interface Props {
   address: Address;
