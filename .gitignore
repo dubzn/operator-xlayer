@@ -6,6 +6,7 @@ build/
 coverage/
 artifacts/
 cache/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
