@@ -56,6 +56,10 @@ export function registerVault(vaultAddress: string): void {
   watchedVaults.add(vaultAddress.toLowerCase());
 }
 
+export function getWatchedVaults(): string[] {
+  return [...watchedVaults];
+}
+
 export function getEventsForVault(vaultAddress: string): IndexedEvent[] {
   return getState().events.filter(
     (e) => e.vault.toLowerCase() === vaultAddress.toLowerCase()

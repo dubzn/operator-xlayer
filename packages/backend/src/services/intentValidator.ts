@@ -1,11 +1,13 @@
 import { recoverIntentSigner } from "@x402-operator/shared";
 import type { ExecutionIntent } from "@x402-operator/shared";
-import { config, getProvider } from "../config.js";
-import { OperatorVaultABI } from "../abi.js";
+import { config, getOperatorAddress, getProvider } from "../config.js";
+import { ExecutionRegistryABI, OperatorVaultABI } from "../abi.js";
 import { ethers } from "ethers";
 
 export interface IntentPolicySnapshot {
   blockTimestamp: number;
+  operatorMatchesBackend: boolean;
+  registryAuthorized: boolean;
   controllerAuthorized: boolean;
   adapterAllowed: boolean;
   nonceUsed: boolean;
@@ -23,6 +25,8 @@ export interface IntentPolicySnapshot {
 }
 
 export interface PolicyCheckSummary {
+  operatorMatchesBackend: boolean;
+  registryAuthorized: boolean;
   controllerAuthorized: boolean;
   adapterAllowed: boolean;
   nonceAvailable: boolean;
@@ -40,13 +44,16 @@ export async function readIntentPolicySnapshot(
   intent: ExecutionIntent
 ): Promise<IntentPolicySnapshot> {
   const provider = getProvider();
-  const vault = new ethers.Contract(config.vaultAddress, OperatorVaultABI, provider);
+  const vault = new ethers.Contract(intent.vaultAddress, OperatorVaultABI, provider);
+  const registry = new ethers.Contract(config.registryAddress, ExecutionRegistryABI, provider);
   const block = await provider.getBlock("latest");
 
   if (!block) {
     throw new Error("Failed to fetch latest block for validation");
   }
 
+  const authorizedOperator = await vault.authorizedOperator();
+  const registryAuthorized = await registry.authorizedVaults(intent.vaultAddress);
   const controllerAuthorized = await vault.authorizedControllers(intent.controller);
   const adapterAllowed = await vault.allowedSwapAdapters(intent.adapter);
   const nonceUsed = await vault.usedNonces(intent.nonce);
@@ -64,6 +71,9 @@ export async function readIntentPolicySnapshot(
 
   return {
     blockTimestamp: block.timestamp,
+    operatorMatchesBackend:
+      String(authorizedOperator).toLowerCase() === getOperatorAddress().toLowerCase(),
+    registryAuthorized,
     controllerAuthorized,
     adapterAllowed,
     nonceUsed,
@@ -94,6 +104,8 @@ export function buildPolicyCheckSummary(
   const policyMinAmountOut = (quotedAmountOut * (10_000n - snapshot.maxSlippageBps)) / 10_000n;
 
   return {
+    operatorMatchesBackend: snapshot.operatorMatchesBackend,
+    registryAuthorized: snapshot.registryAuthorized,
     controllerAuthorized: snapshot.controllerAuthorized,
     adapterAllowed: snapshot.adapterAllowed,
     nonceAvailable: !snapshot.nonceUsed,
@@ -116,10 +128,6 @@ export async function validateIntent(
   intent: ExecutionIntent,
   signature: string
 ): Promise<{ valid: true; controller: string } | { valid: false; error: string }> {
-  if (intent.vaultAddress.toLowerCase() !== config.vaultAddress.toLowerCase()) {
-    return { valid: false, error: "Vault address mismatch" };
-  }
-
   if (intent.adapter.toLowerCase() !== config.swapAdapterAddress.toLowerCase()) {
     return { valid: false, error: "Unsupported swap adapter for this operator" };
   }
@@ -150,6 +158,14 @@ export async function validateIntent(
   }
 
   const summary = buildPolicyCheckSummary(intent, snapshot);
+
+  if (!summary.operatorMatchesBackend) {
+    return { valid: false, error: "Vault is not configured to use this operator backend" };
+  }
+
+  if (!summary.registryAuthorized) {
+    return { valid: false, error: "Vault is not authorized in the execution registry" };
+  }
 
   if (!summary.controllerAuthorized) {
     return { valid: false, error: `Controller ${controller} is not authorized` };

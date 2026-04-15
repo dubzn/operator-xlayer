@@ -9,6 +9,10 @@ export interface CachedQuote {
 
 const quoteCache = new Map<string, CachedQuote>();
 
+function cacheKey(vaultAddress: string, executionHash: string) {
+  return `${vaultAddress.toLowerCase()}:${executionHash.toLowerCase()}`;
+}
+
 function prune(now = Math.floor(Date.now() / 1000)) {
   for (const [key, value] of quoteCache.entries()) {
     if (value.expiresAt <= now) {
@@ -17,12 +21,12 @@ function prune(now = Math.floor(Date.now() / 1000)) {
   }
 }
 
-export function storeQuote(executionHash: string, quote: CachedQuote) {
+export function storeQuote(vaultAddress: string, executionHash: string, quote: CachedQuote) {
   prune();
-  quoteCache.set(executionHash.toLowerCase(), quote);
+  quoteCache.set(cacheKey(vaultAddress, executionHash), quote);
 }
 
-export function getQuote(executionHash: string): CachedQuote | null {
+export function getQuote(vaultAddress: string, executionHash: string): CachedQuote | null {
   prune();
-  return quoteCache.get(executionHash.toLowerCase()) ?? null;
+  return quoteCache.get(cacheKey(vaultAddress, executionHash)) ?? null;
 }

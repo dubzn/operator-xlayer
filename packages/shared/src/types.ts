@@ -68,6 +68,8 @@ export interface ExecutionPreview {
   warnings: string[];
   routePreferencesApplied: RoutePreferences;
   policyCheckSummary: {
+    operatorMatchesBackend: boolean;
+    registryAuthorized: boolean;
     controllerAuthorized: boolean;
     adapterAllowed: boolean;
     nonceAvailable: boolean;

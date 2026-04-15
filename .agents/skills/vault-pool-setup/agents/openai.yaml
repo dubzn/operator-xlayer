@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vault Pool Setup"
+  short_description: "Create a vault for an agent and choose the right API topology"
+  default_prompt: "Interpret 'pool' versus 'vault' correctly for Operator XLayer, explain whether the current operator API is sufficient, and give the step-by-step setup path for the vault, backend, and agent."

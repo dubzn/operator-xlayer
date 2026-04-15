@@ -18,7 +18,7 @@ import {
 import { executeIntent } from "../services/onchainExecutor.js";
 import { getQuote, storeQuote } from "../services/quoteCache.js";
 import { getSwapQuote, resolveRoutePreferences } from "../services/onchainos.js";
-import { recordEvent } from "../services/indexer.js";
+import { recordEvent, registerVault } from "../services/indexer.js";
 
 const router = Router();
 
@@ -31,8 +31,8 @@ router.post("/preview", async (req: Request, res: Response) => {
       return;
     }
 
-    if (intent.vaultAddress.toLowerCase() !== config.vaultAddress.toLowerCase()) {
-      res.status(400).json({ error: "Vault address mismatch" });
+    if (!ethers.isAddress(intent.vaultAddress)) {
+      res.status(400).json({ error: "Invalid vault address" });
       return;
     }
 
@@ -42,7 +42,7 @@ router.post("/preview", async (req: Request, res: Response) => {
       intent.tokenIn,
       intent.tokenOut,
       intent.amountIn,
-      config.vaultAddress,
+      intent.vaultAddress,
       appliedRoutePreferences
     );
     const summary = buildPolicyCheckSummary(intent, snapshot, BigInt(quote.expectedOut));
@@ -53,6 +53,16 @@ router.post("/preview", async (req: Request, res: Response) => {
     if (intent.adapter.toLowerCase() !== config.swapAdapterAddress.toLowerCase()) {
       riskFlags.push("adapter-not-supported-by-operator");
       warnings.push("This operator currently only supports its configured OKX swap adapter.");
+    }
+
+    if (!summary.operatorMatchesBackend) {
+      riskFlags.push("operator-not-authorized");
+      warnings.push("This vault is not configured to use this operator backend.");
+    }
+
+    if (!summary.registryAuthorized) {
+      riskFlags.push("vault-not-registered");
+      warnings.push("This vault is not authorized in the shared execution registry.");
     }
 
     if (!summary.controllerAuthorized) {
@@ -126,7 +136,7 @@ router.post("/preview", async (req: Request, res: Response) => {
     }
 
     if (executionHash !== ethers.ZeroHash) {
-      storeQuote(executionHash, {
+      storeQuote(intent.vaultAddress, executionHash, {
         adapterAddress: config.swapAdapterAddress,
         routerAddress: quote.routerAddress,
         routeData: quote.routeData,
@@ -172,7 +182,17 @@ router.post("/execute", async (req: Request, res: Response) => {
   try {
     const { intent, signature, paymentReference } = req.body as ExecuteRequest;
 
-    const cachedQuote = getQuote(intent.executionHash);
+    if (!intent || !signature) {
+      res.status(400).json({ error: "Missing intent or signature" });
+      return;
+    }
+
+    if (!ethers.isAddress(intent.vaultAddress)) {
+      res.status(400).json({ error: "Invalid vault address" });
+      return;
+    }
+
+    const cachedQuote = getQuote(intent.vaultAddress, intent.executionHash);
     if (!cachedQuote) {
       res.status(400).json({ error: "Preview quote missing or expired; preview again before executing" });
       return;
@@ -221,11 +241,14 @@ router.post("/execute", async (req: Request, res: Response) => {
     }
 
     console.log(`[execute] Intent validated. Controller: ${validation.controller}`);
+    console.log(`[execute] Vault: ${intent.vaultAddress}`);
     console.log(`[execute] Swap: ${intent.amountIn} ${intent.tokenIn} -> ${intent.tokenOut}`);
 
     const result = await executeIntent(intent, signature, paymentReference, cachedQuote);
 
     console.log(`[execute] Success. JobId: ${result.jobId}, TxHash: ${result.txHash}`);
+
+    registerVault(intent.vaultAddress);
 
     // Record execution event to JSON indexer
     recordEvent({
@@ -240,7 +263,7 @@ router.post("/execute", async (req: Request, res: Response) => {
         tokenIn: intent.tokenIn,
         tokenOut: intent.tokenOut,
         amountIn: intent.amountIn,
-        amountOut: cachedQuote.expectedOut,
+        amountOut: result.amountOut,
       },
     });
 

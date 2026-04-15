@@ -1,13 +1,9 @@
 import { ethers } from "ethers";
 import type { PaymentChallenge } from "@x402-operator/shared";
-import { config, getProvider } from "../config.js";
+import { config, getOperatorAddress, getProvider } from "../config.js";
 import { ERC20ABI } from "../abi.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-function getOperatorAddress(): string {
-  return new ethers.Wallet(config.operatorPrivateKey).address;
-}
 
 export function buildPaymentChallenge(): PaymentChallenge {
   return {

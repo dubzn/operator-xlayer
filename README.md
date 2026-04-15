@@ -222,6 +222,16 @@ Closing line:
 | Native currency | `OKB` |
 | Explorer | `https://www.okx.com/explorer/xlayer` |
 
+### Live operator backend
+
+| Field | Value |
+|---|---|
+| Base URL | `https://operator-xlayer.onrender.com` |
+| Preview | `https://operator-xlayer.onrender.com/preview` |
+| Execute | `https://operator-xlayer.onrender.com/execute` |
+| Receipts | `https://operator-xlayer.onrender.com/receipts/:jobId` |
+| Track record | `https://operator-xlayer.onrender.com/operator/track-record` |
+
 ### Current frontend reference addresses
 
 These are the addresses currently wired into `packages/frontend/src/config/contracts.ts`:
@@ -253,12 +263,16 @@ The current frontend and deployment flow are optimized for a crisp first demo:
 
 ### Endpoints
 
+Production base URL: `https://operator-xlayer.onrender.com`
+
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/preview` | Build the signable execution package and run free preflight checks |
 | `POST` | `/execute` | Enforce `x402`, validate the final payload, and submit execution |
 | `GET` | `/receipts/:jobId` | Fetch the public receipt from `ExecutionRegistry` |
 | `GET` | `/operator/track-record` | Return the current onchain success counter |
+
+The backend is now multi-vault: it resolves the target vault from `intent.vaultAddress` on every request. A vault is executable only if it authorizes this operator backend, is registered in the shared `ExecutionRegistry`, and uses the operator's configured swap adapter.
 
 ### ExecutionIntent
 
@@ -333,10 +347,10 @@ Important fields:
 
 - `RPC_URL`
 - `CHAIN_ID`
-- `VAULT_ADDRESS`
 - `REGISTRY_ADDRESS`
 - `FACTORY_ADDRESS`
 - `SWAP_ADAPTER_ADDRESS`
+- `DEFAULT_WATCH_VAULTS` (optional)
 - `OPERATOR_PRIVATE_KEY`
 - `OPERATOR_FEE`
 - `FEE_TOKEN`
@@ -357,12 +371,13 @@ Use `packages/agent/.env.example` as the baseline.
 Important fields:
 
 - `CONTROLLER_PRIVATE_KEY`
-- `OPERATOR_URL`
-- `VAULT_ADDRESS`
+- `OPERATOR_URL` (`https://operator-xlayer.onrender.com` for the live mainnet backend)
+- `VAULT_ADDRESS` or `VAULT_ADDRESSES`
 - `SWAP_ADAPTER_ADDRESS`
 - `TOKEN_IN`
 - `TOKEN_OUT`
 - `FEE_TOKEN`
+- `AUTO_WATCH_VAULTS` (optional)
 
 Run:
 
@@ -370,6 +385,8 @@ Run:
 cd packages/agent
 npm start
 ```
+
+For multi-vault end-to-end tests, set `VAULT_ADDRESSES` as a comma-separated list. The agent will run one pass over every configured vault in each round and can optionally register them in the backend indexer before execution.
 
 ### Frontend
 

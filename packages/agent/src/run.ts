@@ -12,7 +12,6 @@ import type {
 
 const OPERATOR_URL = process.env.OPERATOR_URL || "http://localhost:3000";
 const CONTROLLER_PRIVATE_KEY = process.env.CONTROLLER_PRIVATE_KEY!;
-const VAULT_ADDRESS = process.env.VAULT_ADDRESS!;
 const SWAP_ADAPTER_ADDRESS = process.env.SWAP_ADAPTER_ADDRESS!;
 const TOKEN_IN = process.env.TOKEN_IN!;
 const TOKEN_OUT = process.env.TOKEN_OUT!;
@@ -21,15 +20,51 @@ const RPC_URL = process.env.RPC_URL!;
 const SWAP_AMOUNT = process.env.SWAP_AMOUNT || "1000000";
 const INTERVAL_MS = parseInt(process.env.INTERVAL_MS || "30000");
 const MAX_ROUNDS = parseInt(process.env.MAX_ROUNDS || "0");
+const AUTO_WATCH_VAULTS = (process.env.AUTO_WATCH_VAULTS || "true").toLowerCase() !== "false";
+
+interface HealthResponse {
+  status: string;
+  mode?: string;
+  registry?: string;
+  adapter?: string;
+  watchedVaults?: number;
+}
+
+interface WatchResponse {
+  ok: boolean;
+  watching: string[] | string;
+}
 
 function log(msg: string) {
   const ts = new Date().toISOString().slice(11, 19);
   console.log(`[${ts}] ${msg}`);
 }
 
+function shortAddr(address: string): string {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 function formatAmount(raw: string, decimals = 6): string {
   return (Number(raw) / 10 ** decimals).toFixed(decimals > 6 ? 8 : 2);
 }
+
+function parseVaultAddresses(): string[] {
+  const toList = (value: string | undefined) =>
+    value?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+
+  const explicitList = toList(process.env.VAULT_ADDRESSES);
+  const fallback = process.env.VAULT_ADDRESS ? [process.env.VAULT_ADDRESS.trim()] : [];
+  const vaults = explicitList.length > 0 ? explicitList : fallback;
+
+  if (vaults.length === 0) {
+    throw new Error("Set VAULT_ADDRESS or VAULT_ADDRESSES");
+  }
+
+  const normalized = [...new Set(vaults.map((vault) => ethers.getAddress(vault)))];
+  return normalized;
+}
+
+const TARGET_VAULTS = parseVaultAddresses();
 
 function parseRoutePreferences(): RoutePreferences | undefined {
   const toList = (value: string | undefined) =>
@@ -64,12 +99,13 @@ async function apiCall<T>(
 
 async function executeSwapCycle(
   wallet: ethers.Wallet,
+  vaultAddress: string,
   nonce: number
 ): Promise<boolean> {
   const controller = wallet.address;
 
   const draftIntent: ExecutionIntent = {
-    vaultAddress: VAULT_ADDRESS,
+    vaultAddress,
     controller,
     adapter: SWAP_ADAPTER_ADDRESS,
     tokenIn: TOKEN_IN,
@@ -83,7 +119,7 @@ async function executeSwapCycle(
   };
 
   log(
-    `Intent draft: swap ${formatAmount(SWAP_AMOUNT)} ${TOKEN_IN.slice(0, 8)}... -> ${TOKEN_OUT.slice(0, 8)}...`
+    `Intent draft for ${shortAddr(vaultAddress)}: swap ${formatAmount(SWAP_AMOUNT)} ${TOKEN_IN.slice(0, 8)}... -> ${TOKEN_OUT.slice(0, 8)}...`
   );
 
   const routePreferences = parseRoutePreferences();
@@ -186,11 +222,43 @@ async function main() {
   const wallet = new ethers.Wallet(CONTROLLER_PRIVATE_KEY, provider);
 
   log(`Controller: ${wallet.address}`);
-  log(`Vault:      ${VAULT_ADDRESS}`);
+  log(`Backend:    ${OPERATOR_URL}`);
+  log(`Vaults:     ${TARGET_VAULTS.length}`);
+  for (const vault of TARGET_VAULTS) {
+    log(`  - ${vault}`);
+  }
   log(`Adapter:    ${SWAP_ADAPTER_ADDRESS}`);
   log(`Swap:       ${formatAmount(SWAP_AMOUNT)} per round`);
   log(`Interval:   ${INTERVAL_MS / 1000}s`);
   log(`Max rounds: ${MAX_ROUNDS || "unlimited"}\n`);
+
+  try {
+    const health = await apiCall<HealthResponse>("/health", "GET");
+    if (health.status === 200) {
+      log(
+        `Backend health OK — mode: ${health.data.mode ?? "unknown"}, watched vaults: ${health.data.watchedVaults ?? 0}`
+      );
+    } else {
+      log(`Backend health check returned ${health.status}: ${JSON.stringify(health.data)}`);
+    }
+  } catch (err) {
+    log(`Backend health check failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (AUTO_WATCH_VAULTS) {
+    try {
+      const watch = await apiCall<WatchResponse>("/indexer/watch", "POST", {
+        vaults: TARGET_VAULTS,
+      });
+      if (watch.status === 200) {
+        log(`Indexer watch registered for ${TARGET_VAULTS.length} vault(s)`);
+      } else {
+        log(`Indexer watch failed (${watch.status}): ${JSON.stringify(watch.data)}`);
+      }
+    } catch (err) {
+      log(`Indexer watch request failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   const feeContract = new ethers.Contract(
     FEE_TOKEN,
@@ -209,13 +277,16 @@ async function main() {
     const nonce = Date.now();
     log(`--- Round ${round} ---`);
 
-    try {
-      const ok = await executeSwapCycle(wallet, nonce);
-      if (ok) successes++;
-      else failures++;
-    } catch (err) {
-      failures++;
-      log(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    for (const [index, vaultAddress] of TARGET_VAULTS.entries()) {
+      try {
+        log(`Testing vault ${index + 1}/${TARGET_VAULTS.length}: ${shortAddr(vaultAddress)}`);
+        const ok = await executeSwapCycle(wallet, vaultAddress, nonce + index);
+        if (ok) successes++;
+        else failures++;
+      } catch (err) {
+        failures++;
+        log(`Error in ${shortAddr(vaultAddress)}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     log(`Score: ${successes} success / ${failures} failed\n`);

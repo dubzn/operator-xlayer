@@ -478,6 +478,32 @@
   line-height: 1.7;
 }
 
+.docs-overview-quote {
+  margin: 0;
+  padding-left: 18px;
+  border-left: 2px solid rgba(134, 134, 172, 0.4);
+}
+
+.docs-overview-quote p,
+.docs-overview-copy p,
+.docs-overview-list li {
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.docs-overview-copy {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+}
+
+.docs-overview-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
 .docs-card-grid,
 .docs-boundary-grid,
 .docs-fact-grid,

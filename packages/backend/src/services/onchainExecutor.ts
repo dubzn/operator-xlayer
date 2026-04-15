@@ -18,7 +18,7 @@ export async function executeIntent(
   cachedQuote: CachedQuote
 ): Promise<ExecutionResult> {
   const wallet = getOperatorWallet();
-  const vault = new ethers.Contract(config.vaultAddress, OperatorVaultABI, wallet);
+  const vault = new ethers.Contract(intent.vaultAddress, OperatorVaultABI, wallet);
 
   const intentHash = hashIntent(intent);
   const paymentRefBytes = ethers.zeroPadValue(paymentRef, 32);

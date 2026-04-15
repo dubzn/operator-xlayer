@@ -23,6 +23,7 @@ export const OperatorVaultABI = [
 
 export const ExecutionRegistryABI = [
   "function authorizeVault(address vault) external",
+  "function authorizedVaults(address vault) view returns (bool)",
   "function recordReceipt(tuple(bytes32 jobId, address vault, address controller, address operator, address adapter, bytes32 paymentRef, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, uint256 timestamp, bool success) receipt) external",
   "function getReceipt(bytes32 jobId) view returns (tuple(bytes32 jobId, address vault, address controller, address operator, address adapter, bytes32 paymentRef, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, uint256 timestamp, bool success))",
   "function getTrackRecord(address operator) view returns (uint256)",
