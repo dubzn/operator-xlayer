@@ -941,8 +941,7 @@
 }
 
 .skel-chart {
-  flex: 1;
-  min-height: 240px;
+  min-height: 180px;
   border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(173, 178, 225, 0.04)),
@@ -1523,16 +1522,47 @@ input:disabled {
 
 .graph-meta {
   display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 8px;
 }
 
-.graph-note {
-  max-width: 320px;
+.graph-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   color: var(--text-muted);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.graph-info:hover,
+.graph-info:focus-within {
+  color: var(--text-secondary);
+  outline: none;
+}
+
+.graph-info-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  width: 240px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(20, 22, 48, 0.96);
+  border: 1px solid rgba(173, 178, 225, 0.15);
+  color: var(--text-muted);
+  font-size: 0.76rem;
   line-height: 1.55;
-  font-size: 0.88rem;
+  z-index: 20;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  white-space: normal;
+}
+
+.graph-info:hover .graph-info-tip,
+.graph-info:focus-within .graph-info-tip {
+  display: block;
 }
 
 .chart-shell {
@@ -1578,7 +1608,7 @@ input:disabled {
 
 .vault-chart {
   width: 100%;
-  height: 320px;
+  height: 180px;
   display: block;
 }
 
@@ -2122,13 +2152,11 @@ input:disabled {
     width: 100%;
   }
 
-  .app-header,
-  .graph-meta {
+  .app-header {
     grid-template-columns: 1fr;
   }
 
   .app-header,
-  .graph-meta,
   .deposit-modal-header {
     flex-direction: column;
   }
@@ -2315,7 +2343,7 @@ input:disabled {
   }
 
   .vault-chart {
-    height: 280px;
+    height: 160px;
   }
 }
 
