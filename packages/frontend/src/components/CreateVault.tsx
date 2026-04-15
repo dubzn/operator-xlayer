@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WalletClient, PublicClient, Address } from "viem";
 import { ADDRESSES, VAULT_FACTORY_ABI } from "../config/contracts";
+import { getTokenMeta, TOKEN_REGISTRY, tokenIcon, tokenLabel, tokenName } from "../config/tokens";
+import { formatMoneyInput, moneyInputToNumber, moneyInputToUnits } from "../utils/moneyInput";
 
 interface Props {
   walletClient: WalletClient;
@@ -9,15 +11,64 @@ interface Props {
   onVaultCreated: (vault: Address) => void;
 }
 
+const BASE_TOKEN_OPTIONS = Object.entries(TOKEN_REGISTRY).reduce<Address[]>((options, [tokenAddress, meta]) => {
+  const alreadyIncluded = options.some((address) => tokenLabel(address) === meta.symbol);
+  if (!alreadyIncluded) {
+    options.push(tokenAddress as Address);
+  }
+  return options;
+}, []);
+
 export function CreateVault({ walletClient, publicClient, address, onVaultCreated }: Props) {
-  const [maxPerTrade, setMaxPerTrade] = useState("5");
-  const [maxDaily, setMaxDaily] = useState("10");
-  const [slippageBps, setSlippageBps] = useState("500");
+  const [baseToken, setBaseToken] = useState<Address>(ADDRESSES.usdt);
+  const [baseTokenOpen, setBaseTokenOpen] = useState(false);
+  const [maxPerTrade, setMaxPerTrade] = useState(formatMoneyInput("5"));
+  const [maxDaily, setMaxDaily] = useState(formatMoneyInput("10"));
+  const [slippagePercent, setSlippagePercent] = useState("5.0");
   const [cooldown, setCooldown] = useState("10");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const baseTokenSelectRef = useRef<HTMLDivElement>(null);
+  const baseTokenDecimals = getTokenMeta(baseToken)?.decimals ?? 6;
+  const baseTokenIcon = tokenIcon(baseToken);
+  const maxPerTradeValue = moneyInputToNumber(maxPerTrade);
+  const maxDailyValue = moneyInputToNumber(maxDaily);
+  const cooldownValue = Number(cooldown);
+  const canCreate =
+    Number.isFinite(maxPerTradeValue) &&
+    maxPerTradeValue > 0 &&
+    Number.isFinite(maxDailyValue) &&
+    maxDailyValue > 0 &&
+    Number.isFinite(cooldownValue) &&
+    cooldownValue >= 0;
+
+  useEffect(() => {
+    if (!baseTokenOpen) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!baseTokenSelectRef.current?.contains(event.target as Node)) {
+        setBaseTokenOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setBaseTokenOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [baseTokenOpen]);
 
   const handleCreate = async () => {
+    if (!canCreate) return;
+
     setCreating(true);
     setError(null);
     try {
@@ -26,11 +77,11 @@ export function CreateVault({ walletClient, publicClient, address, onVaultCreate
         abi: VAULT_FACTORY_ABI,
         functionName: "createVault",
         args: [
-          ADDRESSES.usdt,
-          BigInt(parseFloat(maxPerTrade) * 1e6),
-          BigInt(parseFloat(maxDaily) * 1e6),
-          BigInt(slippageBps),
-          BigInt(cooldown),
+          baseToken,
+          moneyInputToUnits(maxPerTrade, baseTokenDecimals),
+          moneyInputToUnits(maxDaily, baseTokenDecimals),
+          BigInt(Math.round(Number(slippagePercent) * 100)),
+          BigInt(Math.round(cooldownValue)),
         ],
         account: address,
         chain: walletClient.chain,
@@ -67,56 +118,140 @@ export function CreateVault({ walletClient, publicClient, address, onVaultCreate
 
   return (
     <section className="create-vault-panel liquid-panel">
-      <div className="create-vault-copy">
-        <p className="eyebrow">Vault builder</p>
-        <h2 className="display-text">Deploy a new liquid shell</h2>
-        <p className="muted-copy">
-          Base token is fixed to USDT in this flow. Tune limits, slippage, and cooldown
-          before shipping the vault to the factory.
-        </p>
+      {/* Row 1: Base Token full width */}
+      <div className="cv-section">
+        <label className="cv-field">
+          <span className="cv-label">Base Token</span>
+          <div
+            ref={baseTokenSelectRef}
+            className={`base-token-select cv-token-select ${baseTokenOpen ? "open" : ""}`}
+          >
+            <button
+              type="button"
+              className="base-token-select-trigger"
+              onClick={() => setBaseTokenOpen((open) => !open)}
+              aria-haspopup="listbox"
+              aria-expanded={baseTokenOpen}
+            >
+              <span className="token-with-icon">
+                {baseTokenIcon ? <img src={baseTokenIcon} alt="" className="token-icon-sm" /> : null}
+                <span className="base-token-trigger-copy">
+                  <strong className="base-token-symbol">{tokenLabel(baseToken)}</strong>
+                  <span className="vault-chip-address">{tokenName(baseToken)}</span>
+                </span>
+              </span>
+              <span className="base-token-chevron" aria-hidden="true">
+                {baseTokenOpen ? "▴" : "▾"}
+              </span>
+            </button>
+
+            {baseTokenOpen ? (
+              <div className="base-token-menu" role="listbox" aria-label="Base token options">
+                {BASE_TOKEN_OPTIONS.map((tokenAddress) => {
+                  const selected = baseToken.toLowerCase() === tokenAddress.toLowerCase();
+                  const icon = tokenIcon(tokenAddress);
+
+                  return (
+                    <button
+                      key={tokenAddress}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`base-token-option ${selected ? "selected" : ""}`}
+                      onClick={() => {
+                        setBaseToken(tokenAddress);
+                        setBaseTokenOpen(false);
+                      }}
+                    >
+                      <span className="token-with-icon">
+                        {icon ? <img src={icon} alt="" className="token-icon-sm" /> : null}
+                        <span className="base-token-trigger-copy">
+                          <strong className="base-token-symbol">{tokenLabel(tokenAddress)}</strong>
+                          <span className="vault-chip-address">{tokenName(tokenAddress)}</span>
+                        </span>
+                      </span>
+                      {selected ? <span className="base-token-check">✓</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </label>
       </div>
 
-      <div className="create-vault-grid">
-        <label>
-          <span className="field-label">Base Token</span>
-          <input value="USDT" disabled />
-        </label>
-        <label>
-          <span className="field-label">Max per Trade (USDT)</span>
-          <input
-            type="number"
-            value={maxPerTrade}
-            onChange={(event) => setMaxPerTrade(event.target.value)}
-          />
-        </label>
-        <label>
-          <span className="field-label">Max Daily Volume (USDT)</span>
-          <input
-            type="number"
-            value={maxDaily}
-            onChange={(event) => setMaxDaily(event.target.value)}
-          />
-        </label>
-        <label>
-          <span className="field-label">Max Slippage (bps)</span>
-          <input
-            type="number"
-            value={slippageBps}
-            onChange={(event) => setSlippageBps(event.target.value)}
-          />
-        </label>
-        <label>
-          <span className="field-label">Cooldown (seconds)</span>
-          <input
-            type="number"
-            value={cooldown}
-            onChange={(event) => setCooldown(event.target.value)}
-          />
-        </label>
+      {/* Row 2: Limits side by side */}
+      <div className="cv-section">
+        <span className="cv-section-title">Limits</span>
+        <div className="cv-row">
+          <label className="cv-field">
+            <span className="cv-label">Max per Trade</span>
+            <div className="money-input-shell">
+              <span className="money-input-prefix">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={maxPerTrade}
+                onChange={(event) => setMaxPerTrade(formatMoneyInput(event.target.value))}
+                placeholder="1,000.00"
+              />
+            </div>
+          </label>
+          <label className="cv-field">
+            <span className="cv-label">Max Daily Volume</span>
+            <div className="money-input-shell">
+              <span className="money-input-prefix">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={maxDaily}
+                onChange={(event) => setMaxDaily(formatMoneyInput(event.target.value))}
+                placeholder="10,000.00"
+              />
+            </div>
+          </label>
+        </div>
       </div>
 
-      <div className="create-vault-actions">
-        <button onClick={handleCreate} disabled={creating} className="btn btn-primary btn-wide">
+      {/* Row 3: Risk controls side by side */}
+      <div className="cv-section">
+        <span className="cv-section-title">Risk Controls</span>
+        <div className="cv-row">
+          <label className="cv-field">
+            <span className="cv-label">Max Slippage</span>
+            <div className="slider-field">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={slippagePercent}
+                onChange={(event) => setSlippagePercent(event.target.value)}
+              />
+              <div className="slider-meta">
+                <span>0%</span>
+                <strong>{Number(slippagePercent).toFixed(1)}%</strong>
+                <span>100%</span>
+              </div>
+            </div>
+          </label>
+          <label className="cv-field">
+            <span className="cv-label">Cooldown</span>
+            <div className="cv-cooldown-shell">
+              <input
+                type="number"
+                min="0"
+                value={cooldown}
+                onChange={(event) => setCooldown(event.target.value)}
+              />
+              <span className="cv-cooldown-unit">sec</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div className="cv-actions">
+        <button onClick={handleCreate} disabled={creating || !canCreate} className="btn btn-primary btn-xl cv-submit">
           {creating ? "Deploying..." : "Create Vault"}
         </button>
         {error && <p className="error">{error}</p>}

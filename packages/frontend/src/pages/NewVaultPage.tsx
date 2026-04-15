@@ -31,12 +31,7 @@ export function NewVaultPage({ walletClient, publicClient, address }: Props) {
     <section className="vault-builder-page">
       <div className="page-intro">
         <div className="page-copy">
-          <p className="eyebrow">Vault builder</p>
           <h1 className="display-text">Create a new shell</h1>
-          <p className="muted-copy">
-            Configure the initial trade caps, slippage, and cooldown. Once the vault is deployed
-            we will route you straight into its detail workspace.
-          </p>
         </div>
 
         <div className="page-intro-actions">

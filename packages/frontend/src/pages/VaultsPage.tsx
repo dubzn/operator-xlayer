@@ -41,7 +41,7 @@ export function VaultsPage({ publicClient, address }: Props) {
     <section className="vaults-page">
       <div className="page-intro-centered">
         <h1 className="display-text">Your vaults</h1>
-        <p className="muted-copy">Open a vault or spin up a new shell.</p>
+        <p className="muted-copy">Click on a vault to see more details</p>
       </div>
 
       {error ? (
@@ -110,8 +110,6 @@ export function VaultsPage({ publicClient, address }: Props) {
               </div>
             </Link>
           </div>
-
-          <p className="muted-copy vault-carousel-hint">Click on a vault to see more details</p>
 
           {hasOverflow ? (
             <div className="vault-carousel-bottom">

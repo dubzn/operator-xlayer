@@ -4,7 +4,8 @@ import type { IndexedEvent } from "../hooks/useVaultHistory";
 import type { VaultData } from "../hooks/useVaultData";
 import { VaultHistory } from "./VaultHistory";
 import { OPERATOR_VAULT_ABI, ERC20_ABI, ADDRESSES } from "../config/contracts";
-import { tokenLabel, tokenIcon, tokenName } from "../config/tokens";
+import { getTokenMeta, tokenLabel, tokenIcon, tokenName } from "../config/tokens";
+import { formatMoneyInput, moneyInputToNumber, moneyInputToUnits, unitsToMoneyInput } from "../utils/moneyInput";
 
 type VaultTab = "graph" | "policies" | "configuration";
 type Timeframe = "24h" | "7d" | "1M" | "1Y" | "Max";
@@ -31,8 +32,8 @@ interface ChartPoint {
 const TIMEFRAMES: Timeframe[] = ["24h", "7d", "1M", "1Y", "Max"];
 const VAULT_TABS: VaultTab[] = ["graph", "policies", "configuration"];
 
-function formatUsdFromBigInt(amount: bigint): string {
-  const value = Number(amount) / 1e6;
+function formatUsdFromBigInt(amount: bigint, decimals = 6): string {
+  const value = Number(amount) / 10 ** decimals;
   return value.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -341,6 +342,10 @@ export function VaultDashboard({
     });
 
   const netValue = Number(data.balanceUsdt + data.balanceUsdc) / 1e6;
+  const baseTokenSymbol = tokenLabel(data.baseToken);
+  const baseTokenDecimals = getTokenMeta(data.baseToken)?.decimals ?? 6;
+  const baseTokenBalance =
+    data.baseToken.toLowerCase() === ADDRESSES.usdc.toLowerCase() ? data.balanceUsdc : data.balanceUsdt;
   const chartSeries = generateChartSeries(vault, netValue, activeTimeframe);
   chartSeries[chartSeries.length - 1] = {
     ...chartSeries[chartSeries.length - 1],
@@ -356,7 +361,7 @@ export function VaultDashboard({
     { address: ADDRESSES.usdc, balance: data.balanceUsdc },
   ];
 
-  const depositParsed = parseFloat(depositAmount);
+  const depositParsed = moneyInputToNumber(depositAmount);
   const canSubmitDeposit =
     isOwner &&
     walletClient &&
@@ -517,8 +522,8 @@ export function VaultDashboard({
                     className="btn btn-ghost"
                     onClick={() => {
                       setPolicyDraft({
-                        maxAmountPerTrade: (Number(data.maxAmountPerTrade) / 1e6).toString(),
-                        maxDailyVolume: (Number(data.maxDailyVolume) / 1e6).toString(),
+                        maxAmountPerTrade: unitsToMoneyInput(data.maxAmountPerTrade, baseTokenDecimals),
+                        maxDailyVolume: unitsToMoneyInput(data.maxDailyVolume, baseTokenDecimals),
                         maxSlippageBps: (Number(data.maxSlippageBps) / 100).toString(),
                         cooldownSeconds: Number(data.cooldownSeconds).toString(),
                       });
@@ -539,8 +544,8 @@ export function VaultDashboard({
                       </svg>
                     </div>
                     <span className="policy-card-label">Max per trade</span>
-                    <strong className="policy-card-value">{formatUsdFromBigInt(data.maxAmountPerTrade)}</strong>
-                    <span className="policy-card-unit">USDT</span>
+                    <strong className="policy-card-value">{formatUsdFromBigInt(data.maxAmountPerTrade, baseTokenDecimals)}</strong>
+                    <span className="policy-card-unit">{baseTokenSymbol}</span>
                   </div>
                   <div className="policy-card">
                     <div className="policy-card-icon">
@@ -550,8 +555,8 @@ export function VaultDashboard({
                       </svg>
                     </div>
                     <span className="policy-card-label">Daily volume cap</span>
-                    <strong className="policy-card-value">{formatUsdFromBigInt(data.maxDailyVolume)}</strong>
-                    <span className="policy-card-unit">USDT</span>
+                    <strong className="policy-card-value">{formatUsdFromBigInt(data.maxDailyVolume, baseTokenDecimals)}</strong>
+                    <span className="policy-card-unit">{baseTokenSymbol}</span>
                   </div>
                   <div className="policy-card">
                     <div className="policy-card-icon">
@@ -580,32 +585,52 @@ export function VaultDashboard({
                 <div className="policy-edit-form" ref={policyFormRef}>
                   <div className="policy-edit-grid">
                     <label className="policy-edit-field">
-                      <span className="field-label">Max per trade (USDT)</span>
+                      <span className="field-label">Max per trade ({baseTokenSymbol})</span>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={policyDraft.maxAmountPerTrade}
-                        onChange={(e) => setPolicyDraft({ ...policyDraft, maxAmountPerTrade: e.target.value })}
-                        placeholder="e.g. 1000"
+                        onChange={(e) =>
+                          setPolicyDraft({
+                            ...policyDraft,
+                            maxAmountPerTrade: formatMoneyInput(e.target.value),
+                          })
+                        }
+                        placeholder="1,000.00"
                       />
                     </label>
                     <label className="policy-edit-field">
-                      <span className="field-label">Daily volume cap (USDT)</span>
+                      <span className="field-label">Daily volume cap ({baseTokenSymbol})</span>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={policyDraft.maxDailyVolume}
-                        onChange={(e) => setPolicyDraft({ ...policyDraft, maxDailyVolume: e.target.value })}
-                        placeholder="e.g. 10000"
+                        onChange={(e) =>
+                          setPolicyDraft({
+                            ...policyDraft,
+                            maxDailyVolume: formatMoneyInput(e.target.value),
+                          })
+                        }
+                        placeholder="10,000.00"
                       />
                     </label>
                     <label className="policy-edit-field">
                       <span className="field-label">Max slippage (%)</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={policyDraft.maxSlippageBps}
-                        onChange={(e) => setPolicyDraft({ ...policyDraft, maxSlippageBps: e.target.value })}
-                        placeholder="e.g. 1.5"
-                      />
+                      <div className="slider-field">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={policyDraft.maxSlippageBps}
+                          onChange={(e) => setPolicyDraft({ ...policyDraft, maxSlippageBps: e.target.value })}
+                        />
+                        <div className="slider-meta">
+                          <span>0%</span>
+                          <strong>{Number(policyDraft.maxSlippageBps || 0).toFixed(1)}%</strong>
+                          <span>100%</span>
+                        </div>
+                      </div>
                     </label>
                     <label className="policy-edit-field">
                       <span className="field-label">Cooldown (seconds)</span>
@@ -629,8 +654,8 @@ export function VaultDashboard({
                       className="btn btn-primary btn-wide"
                       disabled={busy !== null}
                       onClick={() => {
-                        const maxTrade = BigInt(Math.round(parseFloat(policyDraft.maxAmountPerTrade) * 1e6));
-                        const maxDaily = BigInt(Math.round(parseFloat(policyDraft.maxDailyVolume) * 1e6));
+                        const maxTrade = moneyInputToUnits(policyDraft.maxAmountPerTrade, baseTokenDecimals);
+                        const maxDaily = moneyInputToUnits(policyDraft.maxDailyVolume, baseTokenDecimals);
                         const slipBps = BigInt(Math.round(parseFloat(policyDraft.maxSlippageBps) * 100));
                         const cooldown = BigInt(Math.round(parseFloat(policyDraft.cooldownSeconds)));
                         exec("update-policy", () =>
@@ -649,7 +674,7 @@ export function VaultDashboard({
                 <div className="policy-usage-header">
                   <span className="field-label">Daily volume usage</span>
                   <span className="policy-usage-values">
-                    {formatUsdFromBigInt(data.dailyVolumeUsed)} / {formatUsdFromBigInt(data.maxDailyVolume)} USDT
+                    {formatUsdFromBigInt(data.dailyVolumeUsed, baseTokenDecimals)} / {formatUsdFromBigInt(data.maxDailyVolume, baseTokenDecimals)} {baseTokenSymbol}
                   </span>
                 </div>
                 <div className="policy-usage-track">
@@ -1036,7 +1061,7 @@ export function VaultDashboard({
             <div className="deposit-modal-header">
               <div>
                 <p className="eyebrow">Owner deposit</p>
-                <h3 className="display-text">Add USDT liquidity</h3>
+                <h3 className="display-text">Add {baseTokenSymbol} liquidity</h3>
               </div>
               <button
                 className="modal-close"
@@ -1048,7 +1073,7 @@ export function VaultDashboard({
             </div>
 
             <p className="muted-copy">
-              This uses the live onchain flow: first approve USDT, then deposit it into the vault.
+              This uses the live onchain flow: first approve {baseTokenSymbol}, then deposit it into the vault.
             </p>
 
             <div className="deposit-stat-grid">
@@ -1057,20 +1082,21 @@ export function VaultDashboard({
                 <strong>{shortAddr(vault)}</strong>
               </div>
               <div className="summary-stat">
-                <span className="field-label">Current USDT balance</span>
-                <strong>{formatUsdFromBigInt(data.balanceUsdt)} USDT</strong>
+                <span className="field-label">Current {baseTokenSymbol} balance</span>
+                <strong>{formatUsdFromBigInt(baseTokenBalance, baseTokenDecimals)} {baseTokenSymbol}</strong>
               </div>
             </div>
 
             <label className="field-label" htmlFor="deposit-amount">
-              Deposit amount (USDT)
+              Deposit amount ({baseTokenSymbol})
             </label>
             <input
               id="deposit-amount"
-              type="number"
-              placeholder="Amount in USDT"
+              type="text"
+              inputMode="decimal"
+              placeholder={`Amount in ${baseTokenSymbol}`}
               value={depositAmount}
-              onChange={(event) => setDepositAmount(event.target.value)}
+              onChange={(event) => setDepositAmount(formatMoneyInput(event.target.value))}
             />
 
             <div className="deposit-modal-actions">
@@ -1081,10 +1107,10 @@ export function VaultDashboard({
                 className="btn btn-primary btn-wide"
                 disabled={!canSubmitDeposit}
                 onClick={() => {
-                  const amount = BigInt(Math.round(depositParsed * 1e6));
+                  const amount = moneyInputToUnits(depositAmount, baseTokenDecimals);
                   exec("deposit", async () => {
                     const approveHash = await walletClient!.writeContract({
-                      address: ADDRESSES.usdt,
+                      address: data.baseToken,
                       abi: ERC20_ABI,
                       functionName: "approve",
                       args: [vault, amount],
@@ -1092,7 +1118,7 @@ export function VaultDashboard({
                       chain: walletClient!.chain,
                     });
                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
-                    return writeVault("deposit", [ADDRESSES.usdt, amount]);
+                    return writeVault("deposit", [data.baseToken, amount]);
                   });
                 }}
               >

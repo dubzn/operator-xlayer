@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import type { Address } from "viem";
 import { shortAddr } from "../utils/vaults";
 
@@ -10,6 +10,9 @@ interface Props {
 }
 
 export function AppNav({ address, onDisconnect, onConnect, connecting }: Props) {
+  const location = useLocation();
+  const hideSecondaryActions = location.pathname === "/home";
+
   return (
     <nav className="shell-nav glass-card" aria-label="Primary navigation">
       <NavLink to={address ? "/vaults" : "/home"} className="shell-brand">
@@ -17,56 +20,58 @@ export function AppNav({ address, onDisconnect, onConnect, connecting }: Props) 
         <span>X402 Operator</span>
       </NavLink>
 
-      <div className="shell-nav-right">
-        <div className="shell-nav-links">
-          {address && (
+      {!hideSecondaryActions ? (
+        <div className="shell-nav-right">
+          <div className="shell-nav-links">
+            {address && (
+              <NavLink
+                to="/vaults"
+                className={({ isActive }) => `shell-nav-link ${isActive ? "active" : ""}`}
+              >
+                Vaults
+              </NavLink>
+            )}
             <NavLink
-              to="/vaults"
+              to="/docs"
               className={({ isActive }) => `shell-nav-link ${isActive ? "active" : ""}`}
             >
-              Vaults
+              Documentation
             </NavLink>
-          )}
-          <NavLink
-            to="/docs"
-            className={({ isActive }) => `shell-nav-link ${isActive ? "active" : ""}`}
-          >
-            Documentation
-          </NavLink>
-        </div>
+          </div>
 
-        {address ? (
-          <button
-            onClick={onDisconnect}
-            className="shell-wallet-btn"
-            type="button"
-          >
-            <span className="shell-wallet-addr">{shortAddr(address)}</span>
-            <svg
-              className="shell-wallet-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          {address ? (
+            <button
+              onClick={onDisconnect}
+              className="shell-wallet-btn"
+              type="button"
             >
-              <path d="M14 8V5.5a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20h6a1.5 1.5 0 0 0 1.5-1.5V16" />
-              <path d="M10 12h9" />
-              <path d="m16 8 4 4-4 4" />
-            </svg>
-          </button>
-        ) : (
-          <button
-            onClick={onConnect}
-            className="shell-connect-btn"
-            type="button"
-          >
-            {connecting ? "Connecting..." : "Connect"}
-          </button>
-        )}
-      </div>
+              <span className="shell-wallet-addr">{shortAddr(address)}</span>
+              <svg
+                className="shell-wallet-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14 8V5.5a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20h6a1.5 1.5 0 0 0 1.5-1.5V16" />
+                <path d="M10 12h9" />
+                <path d="m16 8 4 4-4 4" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={onConnect}
+              className="shell-connect-btn"
+              type="button"
+            >
+              {connecting ? "Connecting..." : "Connect"}
+            </button>
+          )}
+        </div>
+      ) : null}
     </nav>
   );
 }
