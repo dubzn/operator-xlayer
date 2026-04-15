@@ -7,10 +7,12 @@ import { ConnectWallet } from "./components/ConnectWallet";
 import { VaultSelector } from "./components/VaultSelector";
 import { CreateVault } from "./components/CreateVault";
 import { VaultDashboard } from "./components/VaultDashboard";
+import DocumentationPage from "./components/DocumentationPage";
 import DarkVeil from "./components/DarkVeil";
 import "./App.css";
 
 const GLOW_SURFACE_SELECTOR = ".app-header, .liquid-panel, .glass-card";
+const DOCS_HASH_PREFIX = "#docs";
 
 function LiquidGlassDefs() {
   return (
@@ -80,6 +82,9 @@ function App() {
     useWallet();
   const [selectedVault, setSelectedVault] = useState<Address | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState<"app" | "docs">(() =>
+    window.location.hash.startsWith(DOCS_HASH_PREFIX) ? "docs" : "app"
+  );
   const { data: vaultData, loading, refresh } = useVaultData(publicClient, selectedVault);
   const { events: vaultEvents, loading: historyLoading } = useVaultHistory(selectedVault);
 
@@ -87,6 +92,26 @@ function App() {
     vaultData && address
       ? vaultData.owner.toLowerCase() === address.toLowerCase()
       : false;
+
+  useEffect(() => {
+    const syncViewWithHash = () => {
+      setView(window.location.hash.startsWith(DOCS_HASH_PREFIX) ? "docs" : "app");
+    };
+
+    window.addEventListener("hashchange", syncViewWithHash);
+    return () => window.removeEventListener("hashchange", syncViewWithHash);
+  }, []);
+
+  const openDocs = (section = "overview") => {
+    window.location.hash = `#docs-${section}`;
+  };
+
+  const closeDocs = () => {
+    window.location.hash = "";
+  };
+
+  const mainClassName =
+    view === "docs" ? "app-main app-main-docs" : `app-main ${!address ? "app-main-landing" : ""}`;
 
   return (
     <div className="app-shell">
@@ -108,7 +133,7 @@ function App() {
       <div className="app-noise" />
 
       <div className="app-frame">
-        {address && (
+        {address && view !== "docs" && (
           <header className="app-header liquid-panel liquid-panel-soft">
             <div className="brand-block">
               <div className="brand-heading">
@@ -120,22 +145,34 @@ function App() {
               </p>
             </div>
 
-            <ConnectWallet
-              address={address}
-              connecting={connecting}
-              error={error}
-              onConnect={connect}
-              onDisconnect={() => {
-                disconnect();
-                setSelectedVault(null);
-                setShowCreate(false);
-              }}
-            />
+            <div className="header-actions">
+              <button className="btn btn-ghost" onClick={() => openDocs()}>
+                Documentation
+              </button>
+
+              <ConnectWallet
+                address={address}
+                connecting={connecting}
+                error={error}
+                onConnect={connect}
+                onDisconnect={() => {
+                  disconnect();
+                  setSelectedVault(null);
+                  setShowCreate(false);
+                }}
+              />
+            </div>
           </header>
         )}
 
-        <main className={`app-main ${!address ? "app-main-landing" : ""}`}>
-          {!address ? (
+        <main className={mainClassName}>
+          {view === "docs" ? (
+            <DocumentationPage
+              isConnected={Boolean(address)}
+              onBack={closeDocs}
+              onConnect={connect}
+            />
+          ) : !address ? (
             <section className="landing-screen" aria-label="X402 Operator landing">
               <nav className="landing-nav glass-card" aria-label="Landing navigation">
                 <div className="landing-brand">
@@ -160,8 +197,7 @@ function App() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-xl hero-cta hero-docs"
-                      disabled
-                      title="Documentation page coming soon"
+                      onClick={() => openDocs()}
                     >
                       Documentation
                     </button>

@@ -261,6 +261,10 @@
   margin-top: 18px;
 }
 
+.app-main-docs {
+  align-items: start;
+}
+
 .app-main-landing {
   min-height: calc(100vh - 58px);
   margin-top: 0;
@@ -421,10 +425,6 @@
 
 .hero-cta {
   min-width: 210px;
-}
-
-.hero-docs:disabled {
-  opacity: 0.76;
 }
 
 .hero-note {
