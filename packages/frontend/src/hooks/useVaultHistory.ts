@@ -36,8 +36,8 @@ export function useVaultHistory(vaultAddress: Address | null) {
       const res = await fetch(`${BACKEND_URL}/events/${vaultAddress}`);
       if (res.ok) {
         const data: IndexedEvent[] = await res.json();
-        // Sort newest first
-        data.sort((a, b) => b.blockNumber - a.blockNumber);
+        // Sort newest first, prioritizing actual event time over block number
+        data.sort((a, b) => b.timestamp - a.timestamp || b.blockNumber - a.blockNumber);
         setEvents(data);
       }
     } catch (err) {

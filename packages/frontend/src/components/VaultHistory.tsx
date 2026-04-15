@@ -1,30 +1,33 @@
 import type { IndexedEvent } from "../hooks/useVaultHistory";
-import { ADDRESSES } from "../config/contracts";
+import { formatUnits } from "viem";
+import { getTokenMeta, tokenIcon, tokenLabel } from "../config/tokens";
 
 interface Props {
   events: IndexedEvent[];
   loading: boolean;
 }
 
+const HISTORY_VISIBLE_FROM_TIMESTAMP = Math.floor(new Date(2026, 3, 15, 0, 0, 0, 0).getTime() / 1000);
+const DISPLAY_DECIMALS = 6;
+
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-function formatAmount(raw: string): string {
-  return (Number(raw) / 1e6).toFixed(2);
-}
+function formatAmount(raw: string, tokenAddress?: string): string {
+  const decimals = tokenAddress ? getTokenMeta(tokenAddress)?.decimals ?? 6 : 6;
+  const [wholePart, fractionalPart = ""] = formatUnits(BigInt(raw), decimals).split(".");
+  const whole = BigInt(wholePart || "0").toLocaleString();
+  const fraction = fractionalPart.padEnd(DISPLAY_DECIMALS, "0").slice(0, DISPLAY_DECIMALS);
 
-function tokenName(addr: string): string {
-  const lower = addr.toLowerCase();
-  if (lower === ADDRESSES.usdt.toLowerCase()) return "USDT";
-  if (lower === ADDRESSES.usdc.toLowerCase()) return "USDC";
-  return shortAddr(addr);
+  return `${whole}.${fraction}`;
 }
 
 function formatTime(ts: number): string {
   if (!ts) return "Pending";
   const date = new Date(ts * 1000);
   return date.toLocaleString(undefined, {
+    year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -53,18 +56,55 @@ function getEventVisual(type: string) {
   }
 }
 
+function TokenAmount({
+  raw,
+  tokenAddress,
+}: {
+  raw: string;
+  tokenAddress?: string;
+}) {
+  if (!tokenAddress) {
+    return <span>{formatAmount(raw)}</span>;
+  }
+
+  const icon = tokenIcon(tokenAddress);
+
+  return (
+    <span className="history-token-inline">
+      {icon ? <img src={icon} alt="" className="history-token-inline-icon" /> : null}
+      <span>
+        {formatAmount(raw, tokenAddress)} {tokenLabel(tokenAddress)}
+      </span>
+    </span>
+  );
+}
+
 function getEventDetails(event: IndexedEvent) {
   const data = event.data;
 
   switch (event.type) {
     case "ExecutionSucceeded":
-      return `${formatAmount(data.amountIn)} ${tokenName(data.tokenIn)} → ${formatAmount(
-        data.amountOut
-      )} ${tokenName(data.tokenOut)}`;
+      return (
+        <>
+          <TokenAmount raw={data.amountIn} tokenAddress={data.tokenIn} />
+          <span className="history-description-separator">→</span>
+          <TokenAmount raw={data.amountOut} tokenAddress={data.tokenOut} />
+        </>
+      );
     case "Deposit":
-      return `${formatAmount(data.amount)} ${tokenName(data.token)} added to vault liquidity`;
+      return (
+        <>
+          <TokenAmount raw={data.amount} tokenAddress={data.token} />
+          <span>added to vault liquidity</span>
+        </>
+      );
     case "Withdraw":
-      return `${formatAmount(data.amount)} ${tokenName(data.token)} sent to ${shortAddr(data.to)}`;
+      return (
+        <>
+          <TokenAmount raw={data.amount} tokenAddress={data.token} />
+          <span>sent to {shortAddr(data.to)}</span>
+        </>
+      );
     case "ControllerAuthorized":
       return `Controller ${shortAddr(data.controller)} enabled`;
     case "ControllerRevoked":
@@ -80,6 +120,9 @@ function getEventDetails(event: IndexedEvent) {
 
 export function VaultHistory({ events, loading }: Props) {
   const explorerBase = "https://www.okx.com/explorer/xlayer/tx/";
+  const visibleEvents = [...events]
+    .filter((event) => event.timestamp >= HISTORY_VISIBLE_FROM_TIMESTAMP)
+    .sort((a, b) => b.timestamp - a.timestamp || b.blockNumber - a.blockNumber);
 
   return (
     <section className="history-panel liquid-panel liquid-panel-soft">
@@ -88,27 +131,27 @@ export function VaultHistory({ events, loading }: Props) {
           <p className="eyebrow">Vault activity</p>
           <h3 className="display-text">Recent history</h3>
         </div>
-        <span className="selector-count">{events.length} events</span>
+        <span className="selector-count">{visibleEvents.length} events</span>
       </div>
 
-      {loading && events.length === 0 ? (
+      {loading && visibleEvents.length === 0 ? (
         <div className="history-empty">
           <p className="muted-copy">Loading indexed vault activity…</p>
         </div>
       ) : null}
 
-      {!loading && events.length === 0 ? (
+      {!loading && visibleEvents.length === 0 ? (
         <div className="history-empty">
           <p className="muted-copy">
-            No activity yet. Deposits, swaps, controller updates, and pause actions will show up
-            here as soon as they are indexed.
+            No activity from April 15, 2026 onward yet. Older indexed events are hidden in this
+            view.
           </p>
         </div>
       ) : null}
 
-      {events.length > 0 ? (
+      {visibleEvents.length > 0 ? (
         <div className="history-scroll">
-          {events.map((event, index) => {
+          {visibleEvents.map((event, index) => {
             const visual = getEventVisual(event.type);
             return (
               <article

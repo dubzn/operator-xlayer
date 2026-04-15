@@ -1444,9 +1444,33 @@ input:disabled {
 }
 
 .history-description {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   color: var(--text-secondary);
   line-height: 1.45;
   font-size: 0.9rem;
+}
+
+.history-token-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-primary);
+}
+
+.history-token-inline-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.history-description-separator {
+  color: var(--text-muted);
+  font-weight: 700;
 }
 
 .history-meta {
